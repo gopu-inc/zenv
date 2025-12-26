@@ -1,23 +1,26 @@
 # zenv_transpiler/cli.py
 """
-CLI pour le transpileur Zenv -> Python
-Version améliorée avec plus de fonctionnalités et meilleure UX
+Interface en ligne de commande pour le transpileur Zenv
 """
 
 import argparse
 import sys
 import os
-import time
-import json
-import subprocess
+from typing import Optional, List
 from pathlib import Path
-from typing import Optional, List, Dict, Any
 
-from .transpiler import transpile_file, transpile_string, BRAND, ZvSyntaxError
+from .transpiler import (
+    transpile_file,
+    transpile_string,
+    transpile_directory,
+    validate_zv_code,
+    get_zv_version,
+    get_supported_features,
+    ZvSyntaxError,
+    BRAND
+)
 
-# Version du transpileur
-VERSION = "1.2.0"
-SUPPORTED_EXTENSIONS = {'.zv', '.zenv'}
+VERSION = get_zv_version()
 
 class Colors:
     """Codes couleurs pour le terminal"""
@@ -29,282 +32,115 @@ class Colors:
     RED = '\033[91m'
     END = '\033[0m'
     BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
 
-def print_colored(text: str, color: str, bold: bool = False) -> None:
-    """Affiche du texte coloré dans le terminal"""
+def print_color(text: str, color: str = '', bold: bool = False) -> None:
+    """Affiche du texte coloré"""
+    if color:
+        text = color + text
     if bold:
         text = Colors.BOLD + text
-    print(color + text + Colors.END)
+    if color or bold:
+        text += Colors.END
+    print(text)
+
+def print_success(message: str) -> None:
+    """Affiche un message de succès"""
+    print_color(f"✓ {message}", Colors.GREEN)
+
+def print_error(message: str) -> None:
+    """Affiche un message d'erreur"""
+    print_color(f"✗ {message}", Colors.RED, bold=True)
+
+def print_warning(message: str) -> None:
+    """Affiche un message d'avertissement"""
+    print_color(f"⚠ {message}", Colors.YELLOW)
+
+def print_info(message: str) -> None:
+    """Affiche un message d'information"""
+    print_color(f"ℹ {message}", Colors.BLUE)
 
 def print_header() -> None:
-    """Affiche l'en-tête du transpileur"""
-    print_colored(f"""
+    """Affiche l'en-tête de l'application"""
+    print_color(f"""
 ╔═══════════════════════════════════════════════════╗
 ║     {Colors.BOLD}Zenv Transpiler v{VERSION}{Colors.END}                    ║
 ║     Convertisseur .zv/.zenv → Python             ║
 ╚═══════════════════════════════════════════════════╝
-    """, Colors.CYAN)
-
-def print_success(message: str) -> None:
-    """Affiche un message de succès"""
-    print_colored(f"✓ {message}", Colors.GREEN)
-
-def print_error(message: str) -> None:
-    """Affiche un message d'erreur"""
-    print_colored(f"✗ {message}", Colors.RED, bold=True)
-
-def print_warning(message: str) -> None:
-    """Affiche un message d'avertissement"""
-    print_colored(f"⚠ {message}", Colors.YELLOW)
-
-def print_info(message: str) -> None:
-    """Affiche un message d'information"""
-    print_colored(f"ℹ {message}", Colors.BLUE)
-
-def validate_input_file(input_path: str) -> Path:
-    """Valide le fichier d'entrée"""
-    path = Path(input_path)
-    
-    if not path.exists():
-        print_error(f"Fichier non trouvé: {input_path}")
-        sys.exit(1)
-    
-    if not path.is_file():
-        print_error(f"Le chemin n'est pas un fichier: {input_path}")
-        sys.exit(1)
-    
-    if path.suffix not in SUPPORTED_EXTENSIONS:
-        print_warning(f"Extension non standard: {path.suffix}. Utilisation: {', '.join(SUPPORTED_EXTENSIONS)}")
-    
-    return path
-
-def get_output_path(input_path: Path, output_arg: Optional[str]) -> Path:
-    """Détermine le chemin de sortie"""
-    if output_arg:
-        output_path = Path(output_arg)
-        
-        # Si c'est un répertoire, y placer le fichier avec même nom
-        if output_path.is_dir():
-            output_path = output_path / input_path.with_suffix('.py').name
-        
-        return output_path
-    
-    # Par défaut, même répertoire que l'entrée avec extension .py
-    return input_path.with_suffix('.py')
-
-def transpile_directory(input_dir: str, output_dir: Optional[str], 
-                       recursive: bool = False, verbose: bool = False) -> Dict[str, Any]:
-    """
-    Transpile tous les fichiers .zv d'un répertoire
-    """
-    input_path = Path(input_dir)
-    output_path = Path(output_dir) if output_dir else input_path / "transpiled"
-    
-    if not input_path.exists():
-        print_error(f"Répertoire non trouvé: {input_dir}")
-        return {"success": False, "files": 0, "errors": 1}
-    
-    if not input_path.is_dir():
-        print_error(f"Le chemin n'est pas un répertoire: {input_dir}")
-        return {"success": False, "files": 0, "errors": 1}
-    
-    # Créer le répertoire de sortie
-    output_path.mkdir(parents=True, exist_ok=True)
-    
-    # Collecter les fichiers
-    pattern = "**/*.zv" if recursive else "*.zv"
-    zv_files = list(input_path.glob(pattern))
-    
-    if not zv_files:
-        print_warning(f"Aucun fichier .zv trouvé dans {input_dir}")
-        return {"success": True, "files": 0, "errors": 0}
-    
-    print_info(f"Transpilation de {len(zv_files)} fichiers...")
-    
-    results = {
-        "success": True,
-        "files": len(zv_files),
-        "transpiled": 0,
-        "errors": 0,
-        "errors_list": []
-    }
-    
-    for zv_file in zv_files:
-        try:
-            # Déterminer le chemin de sortie relatif
-            if output_dir:
-                rel_path = zv_file.relative_to(input_path)
-                output_file = output_path / rel_path.with_suffix('.py')
-                output_file.parent.mkdir(parents=True, exist_ok=True)
-            else:
-                output_file = zv_file.with_suffix('.py')
-            
-            if verbose:
-                print_info(f"Transpilation: {zv_file} → {output_file}")
-            
-            # Transpiler
-            transpile_file(str(zv_file), str(output_file))
-            
-            results["transpiled"] += 1
-            if verbose:
-                print_success(f"✓ {zv_file.name}")
-            
-        except ZvSyntaxError as e:
-            results["errors"] += 1
-            results["errors_list"].append(str(zv_file) + ": " + str(e))
-            print_error(f"Erreur dans {zv_file.name}: {e}")
-        except Exception as e:
-            results["errors"] += 1
-            results["success"] = False
-            results["errors_list"].append(str(zv_file) + ": " + str(e))
-            print_error(f"Erreur inattendue dans {zv_file.name}: {e}")
-    
-    # Résumé
-    print_colored("\n" + "="*50, Colors.CYAN)
-    print_info("Résumé de la transpilation:")
-    print_success(f"Fichiers transpilés: {results['transpiled']}/{results['files']}")
-    if results['errors'] > 0:
-        print_error(f"Erreurs: {results['errors']}")
-    else:
-        print_success("Aucune erreur!")
-    
-    return results
-
-def format_code(code: str, output_path: Optional[str] = None) -> bool:
-    """
-    Formate le code Python généré avec black ou yapf
-    """
-    try:
-        if output_path:
-            # Essayer black d'abord
-            try:
-                subprocess.run(
-                    ["black", "--quiet", output_path],
-                    check=True,
-                    capture_output=True
-                )
-                if os.path.exists(output_path):
-                    print_success("Code formaté avec black")
-                return True
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                pass
-            
-            # Essayer yapf sinon
-            try:
-                subprocess.run(
-                    ["yapf", "-i", output_path],
-                    check=True,
-                    capture_output=True
-                )
-                if os.path.exists(output_path):
-                    print_success("Code formaté avec yapf")
-                return True
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                pass
-        
-        return False
-    except Exception:
-        return False
-
-def generate_stats(py_code: str, input_path: Path, output_path: Path) -> Dict[str, Any]:
-    """
-    Génère des statistiques sur la transpilation
-    """
-    zv_lines = 0
-    with open(input_path, 'r', encoding='utf-8') as f:
-        zv_lines = len(f.readlines())
-    
-    py_lines = len(py_code.splitlines())
-    
-    # Taille des fichiers
-    zv_size = input_path.stat().st_size
-    py_size = output_path.stat().st_size if output_path.exists() else len(py_code.encode())
-    
-    return {
-        "zv_lines": zv_lines,
-        "py_lines": py_lines,
-        "zv_size_kb": round(zv_size / 1024, 2),
-        "py_size_kb": round(py_size / 1024, 2),
-        "compression_ratio": round(py_size / zv_size * 100, 2) if zv_size > 0 else 0,
-        "lines_ratio": round(py_lines / zv_lines * 100, 2) if zv_lines > 0 else 0
-    }
+""", Colors.CYAN)
 
 def interactive_mode() -> None:
-    """
-    Mode interactif pour tester la transpilation
-    """
-    print_colored("\n" + "="*50, Colors.CYAN)
-    print_colored("Mode Interactif Zenv", Colors.BOLD + Colors.CYAN)
-    print_colored("Entrez du code Zenv (CTRL+D pour quitter)", Colors.BLUE)
-    print_colored("="*50 + "\n", Colors.CYAN)
+    """Mode interactif REPL"""
+    print_header()
+    print_info("Mode Interactif (tapez 'exit' pour quitter)")
+    print_info("Entrez du code Zenv ligne par ligne:")
     
-    print("Exemples rapides:")
-    print("  message ==> 'Hello'")
-    print("  zncv.[(message)]")
-    print("  numbers ==> {1, 2, 3}")
-    print("  numbers:apend[(4)]")
-    print()
+    zv_lines = []
+    line_number = 1
     
-    zv_code_lines = []
-    try:
-        while True:
-            try:
-                line = input("zenv> ")
-                if line.strip().lower() == "exit":
-                    break
-                zv_code_lines.append(line)
-            except EOFError:
-                print()
+    while True:
+        try:
+            prompt = f"zenv:{line_number:03d}> "
+            line = input(prompt).strip()
+            
+            if line.lower() in ('exit', 'quit', 'q'):
                 break
-    except KeyboardInterrupt:
-        print("\nInterruption.")
-        return
-    
-    if not zv_code_lines:
-        return
-    
-    zv_code = "\n".join(zv_code_lines)
-    
+            elif line == '':
+                continue
+            
+            zv_lines.append(line)
+            
+            # Essayer de transpiler à chaque ligne
+            zv_code = "\n".join(zv_lines)
+            try:
+                py_code = transpile_string(zv_code)
+                print_color("Python:", Colors.GREEN)
+                print(py_code.strip())
+            except ZvSyntaxError as e:
+                # Afficher l'erreur mais continuer
+                print_error(str(e).split('\n')[0])  # Première ligne seulement
+            
+            line_number += 1
+            
+        except KeyboardInterrupt:
+            print("\n\nInterrompu. Tapez 'exit' pour quitter.")
+        except EOFError:
+            print()
+            break
+
+def validate_file(file_path: str) -> bool:
+    """Valide un fichier Zenv"""
     try:
-        print_colored("\n" + "-"*50, Colors.YELLOW)
-        print_colored("Code Python généré:", Colors.BOLD)
-        print_colored("-"*50, Colors.YELLOW)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            zv_code = f.read()
         
-        py_code = transpile_string(zv_code)
-        print(py_code)
+        is_valid, error = validate_zv_code(zv_code)
         
-        print_colored("-"*50, Colors.YELLOW)
-        print_colored("Exécution du code:", Colors.BOLD)
-        print_colored("-"*50, Colors.YELLOW)
-        
-        # Exécuter le code
-        exec_globals = {}
-        exec(py_code, exec_globals)
-        
-        print_colored("\n✓ Exécution réussie!", Colors.GREEN)
-        
-    except ZvSyntaxError as e:
-        print_error(f"Erreur de syntaxe: {e}")
+        if is_valid:
+            print_success(f"{file_path} - Syntaxe valide")
+            return True
+        else:
+            print_error(f"{file_path} - {error}")
+            return False
+            
     except Exception as e:
-        print_error(f"Erreur d'exécution: {e}")
+        print_error(f"{file_path} - Erreur: {str(e)}")
+        return False
 
 def main(argv: Optional[List[str]] = None) -> int:
-    """
-    Fonction principale du CLI
-    """
+    """Fonction principale du CLI"""
     parser = argparse.ArgumentParser(
         prog="zenv",
-        description=f"{Colors.BOLD}Zenv Transpiler v{VERSION}{Colors.END} - Convertisseur .zv/.zenv → Python",
+        description=f"Transpileur Zenv v{VERSION} - Convertit les fichiers .zv/.zenv en Python",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=f"""
-{Colors.CYAN}Exemples:{Colors.END}
-  {Colors.GREEN}zenv programme.zv{Colors.END}            # Transpile et affiche
-  {Colors.GREEN}zenv programme.zv -o output.py{Colors.END} # Transpile vers fichier
-  {Colors.GREEN}zenv programme.zv --run{Colors.END}       # Transpile et exécute
-  {Colors.GREEN}zenv dossier/ --recursive{Colors.END}     # Transpile récursivement
-  {Colors.GREEN}zenv --interactive{Colors.END}           # Mode interactif
-  {Colors.GREEN}zenv --version{Colors.END}              # Affiche la version
+        epilog="""
+Exemples:
+  zenv programme.zv                 # Transpile et affiche
+  zenv programme.zv -o output.py    # Transpile vers un fichier
+  zenv programme.zv --run           # Transpile et exécute
+  zenv dossier/ --recursive         # Transpile un répertoire
+  zenv --interactive                # Mode interactif
+  zenv --validate fichier.zv        # Valide la syntaxe
+  zenv --version                    # Affiche la version
         """
     )
     
@@ -332,36 +168,26 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help="Exécuter le code après transpilation"
     )
-    parser.add_argument(
-        "--exec", 
-        metavar="ARGS",
-        help="Arguments à passer au programme exécuté"
-    )
     
     # Options de répertoire
     parser.add_argument(
-        "--recursive", 
+        "--recursive", "-r",
         action="store_true",
         help="Traiter les répertoires récursivement"
     )
     
-    # Options de formatage
+    # Options de validation
     parser.add_argument(
-        "--format", 
+        "--validate",
         action="store_true",
-        help="Formater le code généré (black/yapf requis)"
-    )
-    parser.add_argument(
-        "--no-format", 
-        action="store_true",
-        help="Ne pas formater le code généré"
+        help="Valider la syntaxe sans transpiler"
     )
     
     # Options d'information
     parser.add_argument(
-        "--stats", 
+        "--features",
         action="store_true",
-        help="Afficher les statistiques de transpilation"
+        help="Afficher les fonctionnalités supportées"
     )
     parser.add_argument(
         "--verbose", "-v", 
@@ -371,14 +197,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--quiet", "-q", 
         action="store_true",
-        help="Mode silencieux (minimal output)"
+        help="Mode silencieux"
     )
     
     # Modes spéciaux
     parser.add_argument(
         "--interactive", "-i", 
         action="store_true",
-        help="Mode interactif"
+        help="Mode interactif REPL"
     )
     parser.add_argument(
         "--version", 
@@ -393,124 +219,127 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"Zenv Transpiler v{VERSION}")
         return 0
     
+    # Afficher les fonctionnalités
+    if args.features:
+        print_header()
+        print_info("Fonctionnalités supportées:")
+        for feature in get_supported_features():
+            print(f"  • {feature}")
+        return 0
+    
     # Mode interactif
     if args.interactive:
-        print_header()
         interactive_mode()
         return 0
     
-    # Validation de l'entrée
+    # Validation de fichier
+    if args.validate and args.input:
+        if not os.path.exists(args.input):
+            print_error(f"Fichier non trouvé: {args.input}")
+            return 1
+        
+        success = validate_file(args.input)
+        return 0 if success else 1
+    
+    # Vérifier qu'un fichier/répertoire est fourni
     if not args.input and not args.interactive:
         parser.print_help()
-        print_error("Aucun fichier ou répertoire spécifié")
+        print_error("Erreur: Aucun fichier ou répertoire spécifié")
         return 1
     
-    # Mode silencieux
-    if not args.quiet and not args.stdout:
+    # Afficher l'en-tête (sauf en mode silencieux ou stdout)
+    if not args.quiet and not args.stdout and os.isatty(0):
         print_header()
     
-    # Valider le chemin d'entrée
-    input_path = validate_input_file(args.input)
+    # Vérifier que le fichier/répertoire existe
+    if not os.path.exists(args.input):
+        print_error(f"Fichier ou répertoire non trouvé: {args.input}")
+        return 1
     
-    # Si c'est un répertoire
-    if input_path.is_dir():
-        results = transpile_directory(
-            str(input_path), 
-            args.output, 
-            args.recursive, 
-            args.verbose
-        )
-        
-        if args.stats and not args.quiet:
-            print_info(f"Fichiers traités: {results['files']}")
-            print_info(f"Transpilés avec succès: {results['transpiled']}")
-            print_info(f"Erreurs: {results['errors']}")
-        
-        return 0 if results["success"] else 1
+    # Traitement des répertoires
+    if os.path.isdir(args.input):
+        try:
+            if args.verbose and not args.quiet:
+                print_info(f"Transpilation du répertoire: {args.input}")
+                if args.recursive:
+                    print_info("Mode récursif activé")
+            
+            results = transpile_directory(args.input, args.output, args.recursive)
+            
+            # Afficher les résultats
+            if not args.quiet:
+                print_success(f"Transpilation terminée!")
+                print_info(f"Fichiers traités: {results['total_files']}")
+                print_info(f"Transpilés avec succès: {results['transpiled']}")
+                print_info(f"Erreurs: {results['errors']}")
+                
+                if results['errors'] > 0 and args.verbose:
+                    print_warning("Erreurs détaillées:")
+                    for error in results['error_messages']:
+                        print(f"  {error}")
+            
+            return 0 if results['success'] else 1
+            
+        except Exception as e:
+            print_error(f"Erreur lors de la transpilation du répertoire: {str(e)}")
+            return 1
     
-    # Si c'est un fichier
-    start_time = time.time()
-    
+    # Traitement d'un fichier unique
     try:
-        # Déterminer le chemin de sortie
-        if args.stdout:
-            output_path = None
-        else:
-            output_path = get_output_path(input_path, args.output)
+        input_path = Path(args.input)
+        
+        if args.verbose and not args.quiet:
+            print_info(f"Transpilation de: {args.input}")
         
         # Transpiler
-        if args.verbose and not args.quiet:
-            print_info(f"Transpilation: {input_path} → {output_path or 'stdout'}")
-        
-        py_code = transpile_file(str(input_path), str(output_path) if output_path else None)
-        
-        if output_path and not args.quiet:
-            print_success(f"Transpilé vers: {output_path}")
-        
-        # Formater le code
-        if args.format and output_path and not args.no_format:
-            if args.verbose and not args.quiet:
-                print_info("Formatage du code...")
-            format_code(py_code, str(output_path))
-        
-        # Exécuter le code
-        if args.run:
-            if not args.quiet:
-                print_info("Exécution du code...")
-                print_colored("-"*50, Colors.YELLOW)
-            
-            try:
-                exec_args = args.exec.split() if args.exec else []
-                
-                if exec_args:
-                    # Exécuter comme script séparé
-                    cmd = [sys.executable, str(output_path)] + exec_args
-                    if args.verbose:
-                        print_info(f"Commande: {' '.join(cmd)}")
-                    result = subprocess.run(cmd, check=True)
-                    return result.returncode
-                else:
-                    # Exécuter dans le même processus
-                    exec_globals = {"__name__": "__main__", "__file__": str(output_path)}
-                    exec(py_code, exec_globals)
-                    
-                    if not args.quiet:
-                        print_colored("-"*50, Colors.YELLOW)
-                        print_success("Exécution terminée avec succès")
-                    
-            except Exception as e:
-                print_error(f"Erreur d'exécution: {e}")
-                return 4
-        
-        # Afficher les statistiques
-        if args.stats and output_path:
-            stats = generate_stats(py_code, input_path, Path(output_path))
-            
-            if not args.quiet:
-                print_colored("\nStatistiques de transpilation:", Colors.BOLD + Colors.CYAN)
-                print(f"  Lignes Zenv: {stats['zv_lines']}")
-                print(f"  Lignes Python: {stats['py_lines']}")
-                print(f"  Ratio: {stats['lines_ratio']}%")
-                print(f"  Taille Zenv: {stats['zv_size_kb']} KB")
-                print(f"  Taille Python: {stats['py_size_kb']} KB")
-                print(f"  Compression: {stats['compression_ratio']}%")
-                
-                elapsed = time.time() - start_time
-                print(f"  Temps écoulé: {elapsed:.3f}s")
-        
-        # Afficher sur stdout si demandé
-        if args.stdout:
+        if args.stdout or not args.output:
+            # Afficher sur stdout
+            py_code = transpile_file(args.input, None)
             print(py_code, end="")
+        else:
+            # Écrire dans un fichier
+            py_code = transpile_file(args.input, args.output)
+            if not args.quiet:
+                print_success(f"Transpilé vers: {args.output}")
+        
+        # Exécuter si demandé
+        if args.run:
+            if args.verbose and not args.quiet:
+                print_info("Exécution du code...")
+            
+            # Créer un fichier temporaire si nécessaire
+            if args.stdout or not args.output:
+                import tempfile
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as tmp:
+                    tmp.write(py_code)
+                    tmp_file = tmp.name
+                
+                try:
+                    # Exécuter le fichier temporaire
+                    import subprocess
+                    result = subprocess.run([sys.executable, tmp_file], check=False)
+                    return result.returncode
+                finally:
+                    os.unlink(tmp_file)
+            else:
+                # Exécuter le fichier généré
+                import subprocess
+                result = subprocess.run([sys.executable, args.output], check=False)
+                return result.returncode
         
         return 0
         
     except ZvSyntaxError as e:
         if not args.quiet:
-            print_error(f"Erreur de syntaxe: {e}")
+            print_error(f"Erreur de syntaxe:\n{str(e)}")
         return 2
+    except FileNotFoundError as e:
+        if not args.quiet:
+            print_error(f"Fichier non trouvé: {str(e)}")
+        return 1
     except Exception as e:
         if not args.quiet:
-            print_error(f"Erreur inattendue: {e}")
+            print_error(f"Erreur inattendue: {str(e)}")
             if args.verbose:
                 import traceback
                 traceback.print_exc()
