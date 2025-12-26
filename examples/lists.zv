@@ -1,0 +1,17 @@
+zen[imoprt math]
+name ==> ['jone', 'leo', 'nat']
+number ==> []
+strings ==> []
+
+number:apend[(1)]
+number:apend[(2)]
+number:apend[(3)]
+
+strings:apend[('hello')]
+strings:apend[('word')]
+
+second~name = name{{1}}
+
+zncv.[(number)]
+zncv.[(strings)]
+zncv.[('the second name list is $s' $ second_name)]
