@@ -41,7 +41,7 @@ def _transform_assignment(line: str, line_no: int) -> Optional[str]:
 
 # --- LIST APPEND ---
 def _transform_list_append(line: str, line_no: int) -> Optional[str]:
-    m = re.fullmatch(r"\s*([A-Za-z_][\w]*)\s*:\s*apend\[`\(\s*(.+?)\s*\)`\]\s*", line)
+    m = re.fullmatch(r"\s*([A-Za-z_][\w]*)\s*:\s*apend\[`\((.+)\)`\]\s*", line)
     if m:
         lst, item = m.groups()
         return f"{lst}.append({item})"
@@ -49,19 +49,25 @@ def _transform_list_append(line: str, line_no: int) -> Optional[str]:
 
 # --- PRINT ---
 def _transform_print(line: str, line_no: int) -> Optional[str]:
-    m = re.fullmatch(r"\s*zncv\.\[`\(\s*(.+)\s*\)`\]\s*", line)
+    m = re.fullmatch(r"\s*zncv\.\[`\((.+)\)`\]\s*", line)
     if not m:
         return None
     inner = m.group(1).strip()
 
+    # Chaîne simple
     if re.fullmatch(r"'[^']*'", inner) or re.fullmatch(r'"[^"]*"', inner):
         return f"print({inner})"
+
+    # Identifiant
     if re.fullmatch(r"[A-Za-z_][\w]*", inner):
         return f"print({inner})"
+
+    # Parenthèses
     paren = re.fullmatch(r"`\(\s*(.+)\s*\)`", inner)
     if paren:
         return f"print({paren.group(1)})"
 
+    # Interpolation avec $s
     str_match = re.search(r"'([^']*?)\s*\$s'", inner)
     if str_match:
         base = str_match.group(1)
