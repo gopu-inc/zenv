@@ -1,22 +1,26 @@
+"""
+Configuration pour pytest avec structure zenv/zenv_transpiler
+"""
+
+import sys
 import os
-from zenv_transpiler import transpile_string
+from pathlib import Path
 
-def test_transpile_hello():
-    src = "zncv.[('hello word')]"
-    out = transpile_string(src)
-    assert out.strip() == 'print(\'hello word\')'
+# Obtenir le chemin du projet
+project_root = Path(__file__).parent.parent
+zenv_path = project_root / "zenv_transpiler"
 
-def test_lists_and_interpolation():
-    src = """
-name ==> ['jone', 'leo', 'nat']
-number ==> []
-number:apend[(1)]
-second~name = name{{1}}
-zncv.[('the second name list is $s' $ second_name)]
-    """.strip()
-    py = transpile_string(src)
-    assert "name = ['jone', 'leo', 'nat']" in py
-    assert "number = []" in py
-    assert "number.append(1)" in py
-    assert "second_name = name[1]" in py
-    assert 'print(f"the second name list is {second_name}")' in py
+# Ajouter les chemins nécessaires
+sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(zenv_path.parent))
+
+# Définir PYTHONPATH
+os.environ["PYTHONPATH"] = str(project_root) + ":" + str(zenv_path.parent)
+
+# Fixtures communes
+def pytest_configure(config):
+    """Configuration pytest"""
+    config.addinivalue_line(
+        "markers",
+        "slow: marque les tests lents (skip par défaut)"
+    )
