@@ -2,6 +2,7 @@
 # Transpileur .zv -> Python
 
 import re
+from typing import Optional
 
 BRAND = "[ZENV]"
 
@@ -16,7 +17,7 @@ def _is_blank_or_comment(line: str) -> bool:
     return s == "" or s.startswith("#")
 
 # --- IMPORTS ---
-def _transform_import(line: str, line_no: int) -> str | None:
+def _transform_import(line: str, line_no: int) -> Optional[str]:
     m1 = re.fullmatch(r"\s*zen\[\s*imoprt\s+([A-Za-z_][\w]*)\s*\]\s*", line)
     if m1:
         return f"import {m1.group(1)}"
@@ -30,7 +31,7 @@ def _transform_import(line: str, line_no: int) -> str | None:
     return None
 
 # --- ASSIGNMENTS ---
-def _transform_assignment(line: str, line_no: int) -> str | None:
+def _transform_assignment(line: str, line_no: int) -> Optional[str]:
     m = re.fullmatch(r"\s*([A-Za-z_][\w]*)\s*==>\s*(.+)\s*", line)
     if m:
         var, expr = m.groups()
@@ -39,7 +40,7 @@ def _transform_assignment(line: str, line_no: int) -> str | None:
     return None
 
 # --- LIST APPEND ---
-def _transform_list_append(line: str, line_no: int) -> str | None:
+def _transform_list_append(line: str, line_no: int) -> Optional[str]:
     m = re.fullmatch(r"\s*([A-Za-z_][\w]*)\s*:\s*apend\[`\(\s*(.+?)\s*\)`\]\s*", line)
     if m:
         lst, item = m.groups()
@@ -47,26 +48,20 @@ def _transform_list_append(line: str, line_no: int) -> str | None:
     return None
 
 # --- PRINT ---
-def _transform_print(line: str, line_no: int) -> str | None:
+def _transform_print(line: str, line_no: int) -> Optional[str]:
     m = re.fullmatch(r"\s*zncv\.\[`\(\s*(.+)\s*\)`\]\s*", line)
     if not m:
         return None
     inner = m.group(1).strip()
 
-    # Chaîne simple
     if re.fullmatch(r"'[^']*'", inner) or re.fullmatch(r'"[^"]*"', inner):
         return f"print({inner})"
-
-    # Identifiant
     if re.fullmatch(r"[A-Za-z_][\w]*", inner):
         return f"print({inner})"
-
-    # Parenthèses
     paren = re.fullmatch(r"`\(\s*(.+)\s*\)`", inner)
     if paren:
         return f"print({paren.group(1)})"
 
-    # Interpolation avec $s
     str_match = re.search(r"'([^']*?)\s*\$s'", inner)
     if str_match:
         base = str_match.group(1)
@@ -78,7 +73,7 @@ def _transform_print(line: str, line_no: int) -> str | None:
     return f"print({inner})"
 
 # --- ACCESS ---
-def _transform_access(line: str, line_no: int) -> str | None:
+def _transform_access(line: str, line_no: int) -> Optional[str]:
     m = re.fullmatch(
         r"\s*([A-Za-z_][\w]*)~([A-Za-z_][\w]*)\s*=\s*([A-Za-z_][\w]*)\{\{([0-9]+)\}\}\s*",
         line
@@ -117,7 +112,7 @@ def transpile_string(zv_code: str) -> str:
 
     return "\n".join(py_lines) + "\n"
 
-def transpile_file(input_path: str, output_path: str | None = None) -> str:
+def transpile_file(input_path: str, output_path: Optional[str] = None) -> str:
     with open(input_path, "r", encoding="utf-8") as f:
         zv_code = f.read()
     py_code = transpile_string(zv_code)
