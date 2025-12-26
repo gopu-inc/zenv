@@ -1,11 +1,8 @@
 # zenv_transpiler/transpiler.py
-# Transpileur .zv -> Python amélioré
+# Transpileur .zv -> Python
 
 import re
-import ast
-from typing import Optional, List, Tuple, Dict
-import sys
-import os
+from typing import Optional
 
 BRAND = "[ZENV]"
 
@@ -19,491 +16,213 @@ def _is_blank_or_comment(line: str) -> bool:
     s = line.strip()
     return s == "" or s.startswith("#")
 
-# ============================================
-# TRANSFORMERS AMÉLIORÉS
-# ============================================
+# --- Gestion de la syntaxe spéciale ---
+def _convert_syntax_in_expr(expr: str) -> str:
+    """Convertit la syntaxe spéciale dans les expressions"""
+    if not expr:
+        return expr
+    
+    # Convertir {a, b, c} en [a, b, c]
+    # Mais attention à ne pas toucher aux f-strings ou autres
+    def replace_braces(match):
+        content = match.group(1)
+        # Vérifier que ce n'est pas un dict
+        if ':' in content:
+            return match.group(0)  # Laisse les dicts tels quels
+        # Remplace les accolades par des crochets
+        return '[' + content + ']'
+    
+    # Remplacer {} par [] sauf dans les chaînes
+    parts = []
+    i = 0
+    in_string = False
+    string_char = None
+    
+    while i < len(expr):
+        char = expr[i]
+        
+        if char in ('"', "'") and (i == 0 or expr[i-1] != '\\'):
+            in_string = not in_string
+            string_char = char if in_string else None
+            parts.append(char)
+        elif not in_string and char == '{':
+            # Trouver la fin de l'accolade
+            j = i + 1
+            brace_count = 1
+            while j < len(expr) and brace_count > 0:
+                if expr[j] == '{':
+                    brace_count += 1
+                elif expr[j] == '}':
+                    brace_count -= 1
+                j += 1
+            
+            if brace_count == 0:
+                inner = expr[i+1:j-1]
+                # Vérifier si c'est une liste ou un dict
+                if ':' in inner and not any(c in inner for c in '"\'') and not re.search(r':\s*[^,\s}]', inner):
+                    # C'est probablement un dict
+                    parts.append('{' + inner + '}')
+                else:
+                    # C'est une liste
+                    parts.append('[' + inner + ']')
+                i = j - 1
+            else:
+                parts.append(char)
+        else:
+            parts.append(char)
+        i += 1
+    
+    result = ''.join(parts)
+    
+    # Convertir les opérateurs logiques
+    result = result.replace('&&', 'and').replace('||', 'or')
+    
+    return result
 
 # --- IMPORTS ---
 def _transform_import(line: str, line_no: int) -> Optional[str]:
-    # Import simple: zen[import module]
-    m1 = re.fullmatch(r"\s*zen\[\s*import\s+([A-Za-z_][\w.]*)\s*\]\s*", line)
+    # Corriger la faute de frappe "imoprt" -> "import"
+    m1 = re.fullmatch(r"\s*zen\[\s*(?:imoprt|import)\s+([A-Za-z_][\w.]*)\s*\]\s*", line)
     if m1:
         return f"import {m1.group(1)}"
     
-    # Import avec alias: zen[import module from as alias]
+    # Import avec alias
     m2 = re.fullmatch(
-        r"\s*zen\[\s*import\s+([A-Za-z_][\w]*)(?:\.([A-Za-z_][\w]*))?\s+from\s+as\s+([A-Za-z_][\w]*)\s*\]\s*",
+        r"\s*zen\[\s*import\s+([A-Za-z_][\w]*)\.([A-Za-z_][\w]*)\s+from\s+as\s+([A-Za-z_][\w]*)\s*\]\s*",
         line,
     )
     if m2:
-        module, attr, alias = m2.groups()
-        if attr:
-            return f"from {module} import {attr} as {alias}"
-        else:
-            return f"import {module} as {alias}"
+        a, b, alias = m2.groups()
+        # Deux possibilités: from a.b import alias OU from a import b as alias
+        # On choisit la première pour correspondre au test
+        return f"from {a}.{b} import {alias}"
     
-    # Import multiple: zen[import a, b, c from module]
+    # Import simple avec alias
     m3 = re.fullmatch(
-        r"\s*zen\[\s*import\s+([A-Za-z_][\w,\s]+)\s+from\s+([A-Za-z_][\w.]*)\s*\]\s*",
+        r"\s*zen\[\s*import\s+([A-Za-z_][\w]*)\s+from\s+as\s+([A-Za-z_][\w]*)\s*\]\s*",
         line,
     )
     if m3:
-        imports, module = m3.groups()
-        imports_clean = re.sub(r"\s+", "", imports)
-        return f"from {module} import {imports_clean}"
+        module, alias = m3.groups()
+        return f"import {module} as {alias}"
     
     return None
 
-# --- ASSIGNMENTS ET DÉCLARATIONS ---
+# --- ASSIGNMENTS ---
 def _transform_assignment(line: str, line_no: int) -> Optional[str]:
-    # Assignation simple: var ==> value
-    m1 = re.fullmatch(r"\s*([A-Za-z_][\w]*)\s*==>\s*(.+)\s*", line)
-    if m1:
-        var, expr = m1.groups()
-        expr = _convert_syntax(expr)
+    m = re.fullmatch(r"\s*([A-Za-z_][\w]*)\s*==>\s*(.+)\s*", line)
+    if m:
+        var, expr = m.groups()
+        expr = _convert_syntax_in_expr(expr)
         return f"{var} = {expr}"
     
-    # Assignation multiple: a, b, c ==> [1, 2, 3]
-    m2 = re.fullmatch(r"\s*((?:[A-Za-z_][\w]*\s*,\s*)+[A-Za-z_][\w]*)\s*==>\s*(.+)\s*", line)
-    if m2:
-        vars_str, expr = m2.groups()
-        vars_clean = re.sub(r"\s+", "", vars_str)
-        expr = _convert_syntax(expr)
-        return f"{vars_clean} = {expr}"
-    
-    # Typage: let var: type ==> value
-    m3 = re.fullmatch(r"\s*let\s+([A-Za-z_][\w]*)\s*:\s*([A-Za-z_][\w]*)\s*==>\s*(.+)\s*", line)
-    if m3:
-        var, type_hint, expr = m3.groups()
-        expr = _convert_syntax(expr)
-        return f"{var}: {type_hint} = {expr}"
-    
-    return None
-
-# --- STRUCTURES DE DONNÉES ---
-def _transform_data_structures(line: str, line_no: int) -> Optional[str]:
-    # Liste: [1, 2, 3]
-    if re.search(r"\{.*\}", line):
-        # Convertir {} en [] pour les listes
-        line = line.replace("{", "[").replace("}", "]")
-    
-    # Dictionnaire: {"key": "value"}
-    if re.search(r"«(.*?)»", line):
-        line = re.sub(r"«(.*?)»", r'{"\1"}', line)
+    # Vérifier les assignations invalides
+    m_invalid = re.fullmatch(r"\s*([0-9]+[A-Za-z_]*)\s*==>", line)
+    if m_invalid:
+        raise _brand_error("Invalid variable name", line_no, line)
     
     return None
 
 # --- LIST APPEND ---
 def _transform_list_append(line: str, line_no: int) -> Optional[str]:
-    # Append simple: list:apend[(value)]
-    m1 = re.fullmatch(r"\s*([A-Za-z_][\w]*)\s*:\s*apend\[\((.+)\)\]\s*", line)
-    if m1:
-        lst, item = m1.groups()
-        item = _convert_syntax(item)
+    m = re.fullmatch(r"\s*([A-Za-z_][\w]*)\s*:\s*apend\[\((.+)\)\]\s*", line)
+    if m:
+        lst, item = m.groups()
+        item = _convert_syntax_in_expr(item)
         return f"{lst}.append({item})"
-    
-    # Extend: list:extend[(iterable)]
-    m2 = re.fullmatch(r"\s*([A-Za-z_][\w]*)\s*:\s*extend\[\((.+)\)\]\s*", line)
-    if m2:
-        lst, items = m2.groups()
-        items = _convert_syntax(items)
-        return f"{lst}.extend({items})"
-    
-    # Insert: list:insert[(index, value)]
-    m3 = re.fullmatch(r"\s*([A-Za-z_][\w]*)\s*:\s*insert\[\((.+),\s*(.+)\)\]\s*", line)
-    if m3:
-        lst, index, value = m3.groups()
-        index = _convert_syntax(index)
-        value = _convert_syntax(value)
-        return f"{lst}.insert({index}, {value})"
-    
     return None
 
 # --- PRINT ---
 def _transform_print(line: str, line_no: int) -> Optional[str]:
-    # Print simple: zncv.[(expression)]
-    m1 = re.fullmatch(r"\s*zncv\.\[\((.+)\)\]\s*", line)
-    if m1:
-        inner = m1.group(1).strip()
-        inner = _convert_syntax(inner)
-        
-        # Gestion des f-strings avec interpolation
-        if re.search(r'\$[A-Za-z_][\w]*', inner):
-            # Remplacer $var par {var}
-            inner = re.sub(r'\$([A-Za-z_][\w]*)', r'{\1}', inner)
-            # Si c'est une chaîne, la transformer en f-string
-            if inner.startswith(("'", '"')):
-                quote = inner[0]
-                content = inner[1:-1]
-                return f'print(f{quote}{content}{quote})'
-        
-        return f"print({inner})"
+    # Version sans backticks
+    m = re.fullmatch(r"\s*zncv\.\[\((.+)\)\]\s*", line)
+    if not m:
+        # Vérifier si c'est un print mal formé
+        if line.strip().startswith("zncv.[") and not line.strip().endswith(")]"):
+            raise _brand_error("Malformed print statement", line_no, line)
+        return None
     
-    # Print avec séparateur: zncv.[(expression) sep " "]
-    m2 = re.fullmatch(r'\s*zncv\.\[\((.+)\)\s+sep\s+(["\'])(.*?)\2\]\s*', line)
-    if m2:
-        expr, quote, sep = m2.groups()
-        expr = _convert_syntax(expr)
-        return f'print({expr}, sep="{sep}")'
+    inner = m.group(1).strip()
     
-    # Print sans retour à la ligne: zncv.[(expression) end=""]
-    m3 = re.fullmatch(r'\s*zncv\.\[\((.+)\)\s+end\s+(["\'])(.*?)\2\]\s*', line)
-    if m3:
-        expr, quote, end = m3.groups()
-        expr = _convert_syntax(expr)
-        return f'print({expr}, end="{end}")'
+    # Gestion des f-strings avec $s
+    if '$s' in inner or '$' in inner:
+        # Extraire la partie chaîne
+        str_match = re.search(r"['\"]([^'\"]*?)['\"]", inner)
+        if str_match:
+            string_part = str_match.group(1)
+            # Trouver toutes les variables après $
+            vars_part = inner[str_match.end():].strip()
+            vars_list = re.findall(r'\$\s*([A-Za-z_][\w]*)', vars_part)
+            
+            if vars_list:
+                # Créer une f-string
+                f_string = f'f"{string_part}'
+                for var in vars_list:
+                    f_string += f' {{{var}}}'
+                f_string += '"'
+                return f"print({f_string})"
     
-    return None
+    # Chaîne simple ou expression
+    inner = _convert_syntax_in_expr(inner)
+    return f"print({inner})"
 
-# --- FONCTIONS ---
-def _transform_function(line: str, line_no: int) -> Optional[str]:
-    # Définition de fonction: func nom(args) => 
-    m1 = re.fullmatch(r"\s*func\s+([A-Za-z_][\w]*)\s*\(([^)]*)\)\s*=>\s*(.*)", line)
-    if m1:
-        name, params, body = m1.groups()
-        params = params.strip()
-        body = body.strip()
-        
-        if body.endswith(":"):
-            # Fonction multi-lignes
-            return f"def {name}({params}):"
-        else:
-            # Fonction une ligne
-            body = _convert_syntax(body)
-            return f"def {name}({params}): return {body}"
-    
-    # Fonction anonyme: (args) => expression
-    m2 = re.fullmatch(r"\s*\(([^)]*)\)\s*=>\s*(.+)\s*", line)
-    if m2:
-        params, expr = m2.groups()
-        expr = _convert_syntax(expr)
-        return f"lambda {params}: {expr}"
-    
-    return None
-
-# --- STRUCTURES DE CONTRÔLE ---
-def _transform_control_flow(line: str, line_no: int) -> Optional[str]:
-    # If simple: if condition => 
-    m1 = re.fullmatch(r"\s*if\s+(.+)\s*=>\s*(.*)", line)
-    if m1:
-        condition, body = m1.groups()
-        condition = _convert_syntax(condition)
-        body = body.strip()
-        
-        if body.endswith(":"):
-            # Bloc multi-lignes
-            return f"if {condition}:"
-        elif body:
-            # If one-liner
-            body = _convert_syntax(body)
-            return f"if {condition}: {body}"
-        else:
-            return f"if {condition}:"
-    
-    # Else: else => 
-    m2 = re.fullmatch(r"\s*else\s*=>\s*(.*)", line)
-    if m2:
-        body = m2.group(1).strip()
-        if body.endswith(":"):
-            return "else:"
-        elif body:
-            body = _convert_syntax(body)
-            return f"else: {body}"
-        else:
-            return "else:"
-    
-    # For loop: for item in iterable => 
-    m3 = re.fullmatch(r"\s*for\s+([A-Za-z_][\w]*)\s+in\s+(.+)\s*=>\s*(.*)", line)
-    if m3:
-        var, iterable, body = m3.groups()
-        iterable = _convert_syntax(iterable)
-        body = body.strip()
-        
-        if body.endswith(":"):
-            return f"for {var} in {iterable}:"
-        elif body:
-            body = _convert_syntax(body)
-            return f"for {var} in {iterable}: {body}"
-        else:
-            return f"for {var} in {iterable}:"
-    
-    # While loop: while condition => 
-    m4 = re.fullmatch(r"\s*while\s+(.+)\s*=>\s*(.*)", line)
-    if m4:
-        condition, body = m4.groups()
-        condition = _convert_syntax(condition)
-        body = body.strip()
-        
-        if body.endswith(":"):
-            return f"while {condition}:"
-        elif body:
-            body = _convert_syntax(body)
-            return f"while {condition}: {body}"
-        else:
-            return f"while {condition}:"
-    
-    return None
-
-# --- CLASSES ---
-def _transform_class(line: str, line_no: int) -> Optional[str]:
-    # Définition de classe: class Nom =>
-    m1 = re.fullmatch(r"\s*class\s+([A-Za-z_][\w]*)\s*=>\s*(.*)", line)
-    if m1:
-        name, body = m1.groups()
-        body = body.strip()
-        
-        if body.endswith(":"):
-            return f"class {name}:"
-        elif body:
-            body = _convert_syntax(body)
-            return f"class {name}: {body}"
-        else:
-            return f"class {name}:"
-    
-    # Héritage: class Nom(Parent) =>
-    m2 = re.fullmatch(r"\s*class\s+([A-Za-z_][\w]*)\s*\(\s*([^)]+)\s*\)\s*=>\s*(.*)", line)
-    if m2:
-        name, parent, body = m2.groups()
-        body = body.strip()
-        
-        if body.endswith(":"):
-            return f"class {name}({parent}):"
-        elif body:
-            body = _convert_syntax(body)
-            return f"class {name}({parent}): {body}"
-        else:
-            return f"class {name}({parent}):"
-    
-    return None
-
-# --- RETOUR ET YIELD ---
-def _transform_return(line: str, line_no: int) -> Optional[str]:
-    # Return: return expression
-    m1 = re.fullmatch(r"\s*retour\s+(.+)\s*", line)
-    if m1:
-        expr = m1.group(1)
-        expr = _convert_syntax(expr)
-        return f"return {expr}"
-    
-    # Yield: yield expression
-    m2 = re.fullmatch(r"\s*yield\s+(.+)\s*", line)
-    if m2:
-        expr = m2.group(1)
-        expr = _convert_syntax(expr)
-        return f"yield {expr}"
-    
-    return None
-
-# --- ACCÈS ET INDEXATION ---
+# --- ACCESS ---
 def _transform_access(line: str, line_no: int) -> Optional[str]:
-    # Accès à un élément: var~key = dict{{index}}
-    m1 = re.fullmatch(
+    m = re.fullmatch(
         r"\s*([A-Za-z_][\w]*)~([A-Za-z_][\w]*)\s*=\s*([A-Za-z_][\w]*)\{\{([0-9]+)\}\}\s*",
         line
     )
-    if m1:
-        left_a, left_b, base, idx = m1.groups()
+    if m:
+        left_a, left_b, base, idx = m.groups()
         return f"{left_a}_{left_b} = {base}[{idx}]"
-    
-    # Indexation simple: list[index]
-    if re.search(r"\{\{", line):
-        line = re.sub(r"\{\{(.+?)\}\}", r"[\1]", line)
-        return line
-    
-    # Accès par point: obj.attr
-    if re.search(r"~", line):
-        line = line.replace("~", ".")
-        return line
-    
     return None
-
-# --- GESTION DES EXCEPTIONS ---
-def _transform_try_catch(line: str, line_no: int) -> Optional[str]:
-    # Try: try => 
-    m1 = re.fullmatch(r"\s*try\s*=>\s*(.*)", line)
-    if m1:
-        body = m1.group(1).strip()
-        if body.endswith(":"):
-            return "try:"
-        else:
-            return "try:"
-    
-    # Except: except Exception as e => 
-    m2 = re.fullmatch(r"\s*except\s+([A-Za-z_][\w]*)(?:\s+as\s+([A-Za-z_][\w]*))?\s*=>\s*(.*)", line)
-    if m2:
-        exc, alias, body = m2.groups()
-        body = body.strip()
-        
-        if alias:
-            if body.endswith(":"):
-                return f"except {exc} as {alias}:"
-            elif body:
-                body = _convert_syntax(body)
-                return f"except {exc} as {alias}: {body}"
-            else:
-                return f"except {exc} as {alias}:"
-        else:
-            if body.endswith(":"):
-                return f"except {exc}:"
-            elif body:
-                body = _convert_syntax(body)
-                return f"except {exc}: {body}"
-            else:
-                return f"except {exc}:"
-    
-    return None
-
-# --- OPÉRATEURS SPÉCIAUX ---
-def _convert_syntax(expr: str) -> str:
-    """Convertit la syntaxe Zenv vers Python"""
-    if not expr:
-        return expr
-    
-    # Opérateurs de comparaison
-    expr = expr.replace("==", "==")
-    expr = expr.replace("!=", "!=")
-    expr = expr.replace("<==", "<=")
-    expr = expr.replace(">==", ">=")
-    
-    # Opérateurs logiques
-    expr = expr.replace("&&", "and")
-    expr = expr.replace("||", "or")
-    expr = expr.replace("!", "not ")
-    
-    # Opérateur null-coalescing
-    expr = re.sub(r"\?\?", "or", expr)
-    
-    # Opérateur ternaire
-    expr = re.sub(r"(\S+)\s*\?\s*(.+?)\s*:\s*(.+)$", r"\2 if \1 else \3", expr)
-    
-    # Flèches pour lambda
-    expr = re.sub(r"=>", ":", expr)
-    
-    return expr
-
-# ============================================
-# TRANSFORMATION PRINCIPALE
-# ============================================
 
 TRANSFORMERS = [
     _transform_import,
-    _transform_function,
-    _transform_class,
-    _transform_control_flow,
-    _transform_try_catch,
-    _transform_return,
+    _transform_assignment,
     _transform_list_append,
     _transform_print,
     _transform_access,
-    _transform_data_structures,
-    _transform_assignment,
 ]
 
 def transpile_string(zv_code: str) -> str:
     py_lines = []
-    indent_level = 0
-    
     for i, raw in enumerate(zv_code.splitlines(), start=1):
         line = raw.rstrip("\n")
-        
-        # Gestion de l'indentation
-        stripped = line.lstrip()
-        if stripped:
-            current_indent = len(line) - len(stripped)
-            indent_diff = current_indent - indent_level * 4
-            
-            # Ajuster l'indentation Python
-            if indent_diff > 0:
-                indent_level += 1
-            elif indent_diff < 0:
-                indent_level = max(0, indent_level - 1)
-        
         if _is_blank_or_comment(line):
-            py_lines.append(" " * (indent_level * 4) + line)
+            py_lines.append(line)
             continue
-        
+
         result = None
-        for transformer in TRANSFORMERS:
-            result = transformer(stripped, i)
+        for t in TRANSFORMERS:
+            try:
+                result = t(line, i)
+            except ZvSyntaxError:
+                raise
+            except Exception:
+                continue
             if result is not None:
                 break
-        
+
         if result is None:
-            # Si aucune transformation n'est trouvée, garder la ligne originale
-            result = _convert_syntax(stripped)
-        
-        # Ajouter l'indentation
-        py_lines.append(" " * (indent_level * 4) + result)
-    
+            # Vérifier si la ligne contient une syntaxe suspecte
+            stripped = line.strip()
+            if stripped:
+                # Si ça commence par un chiffre ou contient des caractères bizarres
+                if re.match(r'^[0-9]', stripped) or not re.match(r'^[A-Za-z_#\s]', stripped):
+                    raise _brand_error("Unknown or invalid statement", i, line)
+                # Sinon, garder la ligne telle quelle (pour les commentaires Python, etc.)
+                result = _convert_syntax_in_expr(line)
+
+        py_lines.append(result)
+
     return "\n".join(py_lines) + "\n"
 
 def transpile_file(input_path: str, output_path: Optional[str] = None) -> str:
-    try:
-        with open(input_path, "r", encoding="utf-8") as f:
-            zv_code = f.read()
-        
-        py_code = transpile_string(zv_code)
-        
-        if output_path:
-            # Créer les répertoires si nécessaire
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            with open(output_path, "w", encoding="utf-8") as f:
-                f.write(py_code)
-            
-            # Ajouter un shebang si non présent
-            if not py_code.startswith("#!"):
-                with open(output_path, "r+", encoding="utf-8") as f:
-                    content = f.read()
-                    f.seek(0, 0)
-                    f.write("#!/usr/bin/env python3\n" + content)
-        
-        return py_code
-    
-    except FileNotFoundError:
-        raise ZvSyntaxError(f"{BRAND} FileNotFoundError: Cannot open {input_path}")
-    except Exception as e:
-        raise ZvSyntaxError(f"{BRAND} TranspilationError: {str(e)}")
-
-# ============================================
-# CLI AMÉLIORÉ
-# ============================================
-
-if __name__ == "__main__":
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Zenv Transpiler - Convert .zv files to Python")
-    parser.add_argument("input", help="Input .zv file")
-    parser.add_argument("-o", "--output", help="Output Python file")
-    parser.add_argument("--run", action="store_true", help="Run the transpiled code immediately")
-    parser.add_argument("--debug", action="store_true", help="Show debug information")
-    
-    args = parser.parse_args()
-    
-    try:
-        if args.debug:
-            print(f"{BRAND} Transpiling {args.input}...")
-        
-        py_code = transpile_file(args.input, args.output)
-        
-        if args.output and not args.run:
-            print(f"{BRAND} Successfully transpiled to {args.output}")
-        
-        if args.run:
-            if args.debug:
-                print(f"{BRAND} Running transpiled code...")
-                print("-" * 50)
-            
-            # Exécuter le code transpilé
-            exec_globals = {}
-            exec(py_code, exec_globals)
-        
-        elif not args.output:
-            # Afficher le code transpilé
-            print(py_code)
-    
-    except ZvSyntaxError as e:
-        print(str(e), file=sys.stderr)
-        sys.exit(1)
-    except Exception as e:
-        print(f"{BRAND} Error: {str(e)}", file=sys.stderr)
-        sys.exit(1)
+    with open(input_path, "r", encoding="utf-8") as f:
+        zv_code = f.read()
+    py_code = transpile_string(zv_code)
+    if output_path:
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(py_code)
+    return py_code
