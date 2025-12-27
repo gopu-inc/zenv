@@ -6,6 +6,7 @@ import requests
 from pathlib import Path
 from typing import List, Dict, Optional
 
+from .. import __version__
 from ..runtime.run import ZenvRuntime
 from ..builder.build import ZenvBuilder, ZenvManifest
 
@@ -34,6 +35,7 @@ class ZenvCLI:
             "remove": self.cmd_remove,
             "info": self.cmd_info,
             "version": self.cmd_version,
+            "hub": self.cmd_hub,
         }
         
     def run(self, args: List[str]) -> int:
@@ -52,13 +54,8 @@ class ZenvCLI:
             return 1
     
     def print_help(self):
-        print('')
-        print('╔═══════════════════════════════════════════════╗')
-        print('║            Zenv Ecosystem v1.0.0             ║')
-        print('║        Runtime, CLI & Package Manager        ║')
-        print('╚═══════════════════════════════════════════════╝')
-        print('')
-        print('Commandes disponibles:')
+        print(f'\n[ZENV:{__version__}]')
+        print('\nCommandes disponibles:')
         print('  run <fichier>            Exécute un fichier .zv/.py')
         print('  build -f <manifeste>     Construit un package depuis .zcf')
         print('  publish <package>        Publie sur Zenv Hub')
@@ -69,15 +66,20 @@ class ZenvCLI:
         print('  list                    Liste les packages installés')
         print('  remove <package>        Supprime un package')
         print('  info <package>          Info détaillée d\'un package')
+        print('  hub <commande>          Gestion du Zenv Hub')
         print('  version                 Affiche la version')
-        print('')
-        print('Exemples:')
+        print('\nCommandes hub:')
+        print('  hub status              Vérifie le statut du hub')
+        print('  hub login <token>       Se connecter au hub')
+        print('  hub logout              Se déconnecter')
+        print('\nExemples:')
         print('  zenv run app.zv')
         print('  zenv build -f package.zcf')
         print('  zenv install requests')
         print('  zenv venv mon-projet')
         print('  zenv init mon-package')
         print('  zenv search "web framework"')
+        print('  zenv hub status')
         print('')
     
     def cmd_run(self, args: List[str]) -> int:
@@ -148,7 +150,7 @@ class ZenvCLI:
             
             "src/main.zv": 'print "Hello from Zenv!"\n\ndef greet(name):\n    return "Hello " + name + "!"\n\nif __name__ == "__main__":\n    result = greet("World")\n    print result\n',
             
-            "README.md": f"# {project_path.name}\n\nA Zenv package.\n\n## Installation\n```bash\nzenv install {project_path.name}\n```\n\n## Usage\n```bash\nzenv run src/main.zv\n```\n\n## Building\n```bash\nzenv build -f package.zcf\n```\n",
+            "README.md": "# My Package\n\nA Zenv package.\n",
         }
         
         for filename, content in files.items():
@@ -214,44 +216,194 @@ class ZenvCLI:
         return self._show_package_info(package_name)
     
     def cmd_version(self, args: List[str]) -> int:
-        from .. import __version__
-        print(f"Zenv Ecosystem v{__version__}")
+        print(f"[ZENV:{__version__}]")
         return 0
+    
+    def cmd_hub(self, args: List[str]) -> int:
+        if not args:
+            print("❌ Usage: zenv hub <commande>")
+            print("   Commandes: status, login, logout")
+            return 1
+        
+        hub_command = args[0]
+        
+        if hub_command == "status":
+            return self._hub_status()
+        elif hub_command == "login":
+            token = args[1] if len(args) > 1 else input("Entrez votre token Zenv: ")
+            return self._hub_login(token)
+        elif hub_command == "logout":
+            return self._hub_logout()
+        else:
+            print(f"❌ Commande hub inconnue: {hub_command}")
+            return 1
+    
+    def _hub_status(self) -> int:
+        try:
+            response = requests.get("https://zenv-hub.onrender.com/api/health", timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                print(f"✅ Zenv Hub: En ligne")
+                print(f"📊 Statut: {data.get('status', 'N/A')}")
+                print(f"📡 GitHub: {data.get('github', 'N/A')}")
+                return 0
+            else:
+                print(f"❌ Zenv Hub: Hors ligne ({response.status_code})")
+                return 1
+        except Exception as e:
+            print(f"❌ Erreur de connexion au hub: {e}")
+            return 1
+    
+    def _hub_login(self, token: str) -> int:
+        token_file = Path.home() / ".zenv" / "token"
+        token_file.parent.mkdir(exist_ok=True)
+        
+        with open(token_file, "w") as f:
+            f.write(token.strip())
+        
+        try:
+            headers = {"Authorization": f"Token {token}"}
+            response = requests.get(
+                "https://zenv-hub.onrender.com/api/auth/profile",
+                headers=headers,
+                timeout=5
+            )
+            
+            if response.status_code == 200:
+                user_data = response.json().get('user', {})
+                print(f"✅ Connecté au Zenv Hub")
+                print(f"👤 Utilisateur: {user_data.get('username', 'N/A')}")
+                print(f"🎯 Rôle: {user_data.get('role', 'N/A')}")
+                return 0
+            else:
+                print(f"❌ Token invalide: {response.status_code}")
+                token_file.unlink(missing_ok=True)
+                return 1
+                
+        except Exception as e:
+            print(f"❌ Erreur de connexion: {e}")
+            token_file.unlink(missing_ok=True)
+            return 1
+    
+    def _hub_logout(self) -> int:
+        token_file = Path.home() / ".zenv" / "token"
+        if token_file.exists():
+            token_file.unlink()
+            print("✅ Déconnecté du Zenv Hub")
+        else:
+            print("ℹ️  Aucune session active")
+        return 0
+    
+    def _get_auth_headers(self):
+        token_file = Path.home() / ".zenv" / "token"
+        if token_file.exists():
+            with open(token_file, "r") as f:
+                token = f.read().strip()
+                return {"Authorization": f"Token {token}"}
+        return {}
     
     def _publish_to_hub(self, package_file: str) -> int:
         print(f"📤 Publication de {package_file} sur Zenv Hub...")
         
         try:
+            path = Path(package_file)
+            if not path.exists():
+                print(f"❌ Fichier non trouvé: {package_file}")
+                return 1
+            
             with open(package_file, 'rb') as f:
                 file_content = f.read()
             
+            import tarfile
+            package_name = path.stem.replace('.zcf', '')
+            version = "1.0.0"
+            description = ""
+            
+            try:
+                with tarfile.open(package_file, "r:gz") as tar:
+                    for member in tar.getmembers():
+                        if member.name.endswith("metadata.json") or member.name.endswith("package.zcf"):
+                            metadata_file = tar.extractfile(member)
+                            if metadata_file:
+                                content = metadata_file.read().decode('utf-8')
+                                if 'metadata.json' in member.name:
+                                    metadata = json.loads(content)
+                                    package_name = metadata.get('name', package_name)
+                                    version = metadata.get('version', version)
+                                    description = metadata.get('description', description)
+                                elif 'package.zcf' in member.name:
+                                    import configparser
+                                    config = configparser.ConfigParser()
+                                    config.read_string(content)
+                                    if 'Zenv' in config:
+                                        package_name = config['Zenv'].get('name', package_name)
+                                        version = config['Zenv'].get('version', version)
+                                        description = config['Zenv'].get('description', description)
+            except:
+                pass
+            
             hub_url = "https://zenv-hub.onrender.com/api/packages/upload"
             
-            files = {'file': (package_file, file_content)}
-            data = {'name': Path(package_file).stem}
+            files = {
+                'file': (path.name, file_content, 'application/gzip')
+            }
             
-            response = requests.post(hub_url, files=files, data=data)
+            data = {
+                'name': package_name,
+                'version': version,
+                'description': description or f"Package {package_name}",
+                'author': 'Zenv User'
+            }
             
-            if response.status_code == 200:
+            headers = self._get_auth_headers()
+            
+            response = requests.post(
+                hub_url,
+                files=files,
+                data=data,
+                headers=headers
+            )
+            
+            if response.status_code in [200, 201]:
                 print("✅ Package publié avec succès!")
+                print(f"📦 Nom: {package_name}")
+                print(f"📄 Version: {version}")
+                if response.json():
+                    print(f"🔗 URL: https://zenv-hub.onrender.com/api/packages/download/{package_name}/{version}")
                 return 0
             else:
-                print(f"❌ Erreur: {response.status_code} - {response.text}")
+                print(f"❌ Erreur: {response.status_code}")
+                print(f"   Message: {response.text}")
+                
+                if response.status_code == 401:
+                    print("\n💡 Conseil: Connectez-vous d'abord avec:")
+                    print("   zenv hub login <votre_token>")
+                
                 return 1
                 
         except Exception as e:
             print(f"❌ Erreur de publication: {e}")
+            import traceback
+            traceback.print_exc()
             return 1
     
     def _install_package(self, package_name: str, version: str) -> int:
         print(f"📦 Installation de {package_name}@{version}...")
         
         try:
+            headers = self._get_auth_headers()
+            
             download_url = f"https://zenv-hub.onrender.com/api/packages/download/{package_name}/{version}"
-            response = requests.get(download_url, stream=True)
+            response = requests.get(download_url, headers=headers, stream=True)
             
             if response.status_code != 200:
-                print(f"❌ Package non trouvé: {package_name}")
+                if response.status_code == 404:
+                    print(f"❌ Package non trouvé: {package_name}@{version}")
+                elif response.status_code == 401:
+                    print(f"❌ Accès non autorisé")
+                    print("💡 Connectez-vous avec: zenv hub login <token>")
+                else:
+                    print(f"❌ Erreur: {response.status_code}")
                 return 1
             
             packages_dir = Path.home() / ".zenv" / "packages" / package_name
@@ -350,6 +502,6 @@ class ZenvCLI:
                         return 0
         except:
             pass
-    
+        
         print(f"❌ Package non trouvé: {package_name}")
         return 1
