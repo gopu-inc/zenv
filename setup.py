@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="zenv",
-    version="1.0.0",
+    version="0.1.0",
     description="Écosystème Zenv - Runtime, CLI et Package Manager",
     author="gopu.inc",
     packages=find_packages(),
