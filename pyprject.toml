@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zenv-transpiler"
+version = "1.2.0"
+authors = [
+    {name = "Mauricio", email = "ceoseshell@gmail.com"},
+]
+description = "A .zv/.zenv to Python transpiler"
+readme = "README.md"
+requires-python = ">=3.6"
+license = {text = "MIT"}
+keywords = ["transpiler", "compiler", "python", "zenv", "zv"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Compilers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "black>=22.0", "flake8>=6.0"]
+
+[project.urls]
+Homepage = "https://github.com/gopu-inc/zenv"
+Discord = "https://discord.gg/qWx5DszrC"
+Issues = "https://github.com/gopu-inc/zenv/issues"
+
+[project.scripts]
+zenv = "zenv_transpiler.cli:main"
+zv = "zenv_transpiler.cli:main"
