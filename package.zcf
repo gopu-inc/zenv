@@ -1,0 +1,42 @@
+# Zenv Configuration File - Manifeste du package
+[Zenv]
+name = mon-package-zenv
+version = 1.0.0
+author = Votre Nom
+description = Un package Zenv fantastique
+license = MIT
+
+[File-build]
+main = src/main.zv
+include = 
+    src/**/*.zv
+    src/**/*.py
+    README.md
+    LICENSE
+exclude =
+    tests/
+    __pycache__/
+
+[Dep.zv]
+# Dépendances Zenv (installées depuis zenv-hub)
+requests = 1.0.0
+zenv-web = latest
+zenv-db = 2.1.0
+
+[Dep.py]
+# Dépendances Python (installées depuis PyPI)
+flask = 2.0.0
+numpy = >=1.24.0
+pandas = latest
+
+[Docs]
+description = README.md
+changelog = CHANGELOG.md
+license = LICENSE
+
+[Build]
+type = zenv  # zenv ou python
+entry_point = src/main.zv
+output = dist/{name}-{version}.zcf.gs
+compression = gzip
+optimize = true
