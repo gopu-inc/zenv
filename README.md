@@ -30,6 +30,10 @@ pip install -e .
 # Vérifiez l'installation
 zenv version
 ```
+## ou via python 🐍
+```
+pip install zenv
+```
 
 📖 Guide d'utilisation
 
