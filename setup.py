@@ -12,7 +12,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="gopu.inc",
-    author_email="contact@gopu.inc",  # <-- ajoute ton email si tu veux
+    author_email="ceoseshell@gmail.com",  # <-- ajoute ton email si tu veux
     url="https://github.com/gopu-inc/zenv",
     project_urls={
         "Documentation": "https://zenv-hub.vercel.app",
