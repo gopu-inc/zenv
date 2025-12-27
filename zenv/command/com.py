@@ -4,6 +4,7 @@ import os
 import json
 import requests
 import shutil
+import tarfile
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -315,7 +316,6 @@ class ZenvCLI:
             with open(package_file, 'rb') as f:
                 file_content = f.read()
             
-            import tarfile
             package_name = path.stem.replace('.zcf', '')
             version = "1.0.0"
             description = ""
@@ -436,42 +436,44 @@ class ZenvCLI:
                 shutil.rmtree(packages_dir)
             packages_dir.mkdir(parents=True, exist_ok=True)
             
-            package_file = packages_dir / filename
-            with open(package_file, 'wb') as f:
+            archive_file = packages_dir / filename
+            with open(archive_file, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
             
-            if filename.endswith('.zv'):
-                print(f"📄 Fichier source Zenv détecté: {filename}")
+            print(f"📦 Extraction de l'archive...")
+            
+            try:
+                with tarfile.open(archive_file, "r:gz") as tar:
+                    tar.extractall(packages_dir)
                 
-                src_dir = packages_dir / "src"
-                src_dir.mkdir(exist_ok=True)
-                
-                shutil.move(package_file, src_dir / filename)
-                
-                with open(packages_dir / "__init__.py", "w") as f:
-                    f.write(f'''# Package Zenv: {package_name}
-import os
-import sys
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-print("Package {package_name} chargé")
-''')
+                print(f"✅ Archive extraite")
                 
                 from ..transpiler.tra import ZenvTranspiler
                 transpiler = ZenvTranspiler()
                 
-                zv_file = src_dir / filename
-                py_file = src_dir / filename.replace('.zv', '.py')
+                for zv_file in packages_dir.rglob("*.zv"):
+                    if zv_file.is_file():
+                        py_file = zv_file.with_suffix('.py')
+                        try:
+                            transpiler.transpile_file(str(zv_file), str(py_file))
+                            print(f"✅ Transpilé: {zv_file.name}")
+                        except Exception as e:
+                            print(f"⚠️  Non transpilé: {zv_file.name}")
                 
+                archive_file.unlink(missing_ok=True)
+                
+            except Exception as e:
+                print(f"❌ Erreur d'extraction: {e}")
                 try:
-                    transpiler.transpile_file(str(zv_file), str(py_file))
-                    print(f"✅ Fichier transpilé: {py_file.name}")
-                except Exception as e:
-                    print(f"⚠️  Erreur de transpilation: {e}")
-                    with open(py_file, "w") as f:
-                        f.write(f"# Original: {filename}\n# Transpilation failed\n")
+                    from ..transpiler.tra import ZenvTranspiler
+                    transpiler = ZenvTranspiler()
+                    
+                    py_file = archive_file.with_suffix('.py')
+                    transpiler.transpile_file(str(archive_file), str(py_file))
+                    print(f"✅ Fichier transpilé")
+                except:
+                    pass
             
             package_metadata = {
                 'name': package_name,
@@ -489,6 +491,7 @@ print("Package {package_name} chargé")
             
             print(f"✅ {package_name}@{version} installé avec succès!")
             print(f"📁 Emplacement: {packages_dir}")
+            
             return 0
             
         except Exception as e:
@@ -558,6 +561,13 @@ print("Package {package_name} chargé")
                 print(f"📁 Chemin: {local_dir}")
                 print(f"📦 Taille: {info.get('size', 0)} octets")
                 print(f"📥 Installé le: {info.get('installed_at', 'N/A')}")
+                
+                print(f"📂 Fichiers:")
+                for item in local_dir.rglob("*"):
+                    if item.is_file():
+                        rel_path = item.relative_to(local_dir)
+                        print(f"   • {rel_path}")
+                
                 return 0
         
         try:
