@@ -1,3 +1,5 @@
+<img width="1024" height="1024" alt="IMG_7694" src="https://github.com/user-attachments/assets/4a57a174-fcf5-498e-b3b7-95a0b6e05015" />
+
 # 🚀 Zenv - Écosystème de développement complet
 
 ![Zenv Version](https://img.shields.io/badge/Zenv-1.0.0-blue)
