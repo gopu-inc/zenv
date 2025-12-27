@@ -4,7 +4,7 @@ Zenv Runtime - Écosystème complet de développement
 """
 
 __version__ = "0.1.0"
-__author__ = "Zenv Team"
+__author__ = "gopu.inc"
 __license__ = "MIT"
 
 from .runtime import ZenvVirtualMachine, ZenvREPL
