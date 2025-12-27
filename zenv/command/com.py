@@ -3,6 +3,7 @@ import sys
 import os
 import json
 import requests
+import shutil
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -393,12 +394,36 @@ class ZenvCLI:
         try:
             headers = self._get_auth_headers()
             
+            check_url = f"https://zenv-hub.onrender.com/api/packages"
+            response = requests.get(check_url, headers=headers)
+            
+            if response.status_code != 200:
+                print(f"❌ Erreur de connexion au hub: {response.status_code}")
+                return 1
+            
+            packages = response.json().get('packages', [])
+            package_info = None
+            
+            for pkg in packages:
+                if pkg['name'] == package_name:
+                    package_info = pkg
+                    if version == "latest":
+                        version = pkg.get('version', '1.0.0')
+                    break
+            
+            if not package_info:
+                print(f"❌ Package non disponible sur le hub: {package_name}")
+                print(f"   Packages disponibles: {[p['name'] for p in packages]}")
+                return 1
+            
+            filename = package_info.get('filename', f"{package_name}-{version}.zv")
+            
             download_url = f"https://zenv-hub.onrender.com/api/packages/download/{package_name}/{version}"
             response = requests.get(download_url, headers=headers, stream=True)
             
             if response.status_code != 200:
                 if response.status_code == 404:
-                    print(f"❌ Package non trouvé: {package_name}@{version}")
+                    print(f"❌ Version non trouvée: {package_name}@{version}")
                 elif response.status_code == 401:
                     print(f"❌ Accès non autorisé")
                     print("💡 Connectez-vous avec: zenv hub login <token>")
@@ -407,22 +432,69 @@ class ZenvCLI:
                 return 1
             
             packages_dir = Path.home() / ".zenv" / "packages" / package_name
+            if packages_dir.exists():
+                shutil.rmtree(packages_dir)
             packages_dir.mkdir(parents=True, exist_ok=True)
             
-            package_file = packages_dir / f"{package_name}.zcf.gs"
+            package_file = packages_dir / filename
             with open(package_file, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
             
-            from ..builder.build import ZenvBuilder
-            builder = ZenvBuilder()
-            builder.install_package(str(package_file))
+            if filename.endswith('.zv'):
+                print(f"📄 Fichier source Zenv détecté: {filename}")
+                
+                src_dir = packages_dir / "src"
+                src_dir.mkdir(exist_ok=True)
+                
+                shutil.move(package_file, src_dir / filename)
+                
+                with open(packages_dir / "__init__.py", "w") as f:
+                    f.write(f'''# Package Zenv: {package_name}
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+print("Package {package_name} chargé")
+''')
+                
+                from ..transpiler.tra import ZenvTranspiler
+                transpiler = ZenvTranspiler()
+                
+                zv_file = src_dir / filename
+                py_file = src_dir / filename.replace('.zv', '.py')
+                
+                try:
+                    transpiler.transpile_file(str(zv_file), str(py_file))
+                    print(f"✅ Fichier transpilé: {py_file.name}")
+                except Exception as e:
+                    print(f"⚠️  Erreur de transpilation: {e}")
+                    with open(py_file, "w") as f:
+                        f.write(f"# Original: {filename}\n# Transpilation failed\n")
+            
+            package_metadata = {
+                'name': package_name,
+                'version': version,
+                'filename': filename,
+                'description': package_info.get('description', ''),
+                'author': package_info.get('author', ''),
+                'size': package_info.get('size', 0),
+                'installed_at': str(__import__('datetime').datetime.now()),
+                'downloads_count': package_info.get('downloads_count', 0)
+            }
+            
+            with open(packages_dir / "package.json", "w") as f:
+                json.dump(package_metadata, f, indent=2)
             
             print(f"✅ {package_name}@{version} installé avec succès!")
+            print(f"📁 Emplacement: {packages_dir}")
             return 0
             
         except Exception as e:
             print(f"❌ Erreur d'installation: {e}")
+            import traceback
+            traceback.print_exc()
             return 1
     
     def _search_packages(self, query: str) -> int:
@@ -484,6 +556,8 @@ class ZenvCLI:
                 print(f"👤 Auteur: {info.get('author', 'N/A')}")
                 print(f"📝 Description: {info.get('description', 'N/A')}")
                 print(f"📁 Chemin: {local_dir}")
+                print(f"📦 Taille: {info.get('size', 0)} octets")
+                print(f"📥 Installé le: {info.get('installed_at', 'N/A')}")
                 return 0
         
         try:
@@ -499,6 +573,8 @@ class ZenvCLI:
                         print(f"👤 Auteur: {pkg.get('author', 'N/A')}")
                         print(f"📝 Description: {pkg.get('description', 'N/A')}")
                         print(f"📥 Téléchargements: {pkg.get('downloads_count', 0)}")
+                        print(f"📦 Taille: {pkg.get('size', 0)} octets")
+                        print(f"📅 Mise à jour: {pkg.get('updated_at', 'N/A')}")
                         return 0
         except:
             pass
