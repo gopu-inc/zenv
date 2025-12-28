@@ -2,7 +2,7 @@ name: Publish to PyPI
 
 on:
   push:
-    tags: "v*.*.*"   # déclenche sur les tags versionnés (ex: v0.1.0)
+    branches: main  # déclenche sur les tags versionnés (ex: v0.1.0)
 
 jobs:
   build-and-publish:
