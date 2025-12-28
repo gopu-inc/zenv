@@ -1,0 +1,21 @@
+# Inclure tous les fichiers Python
+recursive-include zenv_transpiler *.py
+recursive-include zenv *.py
+
+# Inclure les exemples et tests
+recursive-include examples *
+recursive-include tests *
+
+# Inclure les fichiers de configuration et métadonnées
+include README.md
+include LICENSE
+include setup.py
+include pyproject.toml
+include MANIFEST.in
+
+# Inclure les fichiers de données éventuels
+recursive-include zenv_transpiler *.txt *.md *.json *.yaml *.yml
+recursive-include zenv *.txt *.md *.json *.yaml *.yml
+
+# Inclure tout le reste (fallback)
+global-include *
