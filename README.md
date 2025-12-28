@@ -512,10 +512,14 @@ Ce projet est sous licence MIT. Voir le fichier LICENSE pour plus de détails.
 
 ## 🙏 Remerciements
 · **vercel** - pour l'hebergement du site
+
 · **render** - pour l'hebergement du api
+
 · **Python** - Pour l'écosystème incroyable
+
 · **Flask** - Pour l'inspiration de simplicité
-· La communauté open-source - Pour toutes les contributions
+
+· **La communauté open-source** - Pour toutes les contributions
 
 ## 📞 Support
 
