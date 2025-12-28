@@ -1,12 +1,19 @@
 <img width="280" height="280" alt="IMG_7694" src="https://github.com/user-attachments/assets/4a57a174-fcf5-498e-b3b7-95a0b6e05015" />
 
 # 🚀 Zenv - Écosystème de développement complet
-[![PyPI version](https://img.shields.io/pypi/v/zenv-lang.svg)](https://pypi.org/project/zenv-lang/)
-![Badge](https://zenv-hub.onrender.com/badge/svg/version)
-![Zenv Version](https://img.shields.io/badge/Zenv-1.0.0-blue)
-![Python Version](https://img.shields.io/badge/Python-3.7%2B-green)
-![License](https://img.shields.io/badge/License-MIT-black)
-[![Publish to PyPI](https://github.com/gopu-inc/zenv/actions/workflows/publish-pypi.yml/badge.svg)](https://github.com/gopu-inc/zenv/actions/workflows/publish-pypi.yml)
+<div align="center">
+
+[![PyPI Version](https://img.shields.io/pypi/v/zenv-lang?style=for-the-badge&logo=pypi&logoColor=white&color=blue)](https://pypi.org/project/zenv-lang/)
+[![Python Version](https://img.shields.io/pypi/pyversions/zenv-lang?style=for-the-badge&logo=python&logoColor=white&color=3776AB)](https://pypi.org/project/zenv-lang/)
+[![License](https://img.shields.io/pypi/l/zenv-lang?style=for-the-badge&color=black)](https://opensource.org/licenses/MIT)
+[![Downloads](https://img.shields.io/pepy/dt/zenv-lang?style=for-the-badge&logo=python&logoColor=white&color=blue&label=Downloads)](https://pepy.tech/project/zenv-lang)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/gopu-inc/zenv/publish-pypi.yml?style=for-the-badge&logo=github&label=PUBLISH)](https://github.com/gopu-inc/zenv/actions/workflows/publish-pypi.yml)
+
+</div>
+
+
+
+
 > **Zenv Programming Language powered by gopu.inc**
 
 <div>
