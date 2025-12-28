@@ -6,7 +6,7 @@ here = pathlib.Path(__file__).parent.resolve()
 long_description = (here / "README.md").read_text(encoding="utf-8")
 
 setup(
-    name="zenv",
+    name="zenv-lang",
     version="0.1.0",
     description="Écosystème Zenv - Runtime, CLI et Package Manager",
     long_description=long_description,
