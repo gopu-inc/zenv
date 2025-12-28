@@ -16,7 +16,7 @@ et ce projet suit Semantic Versioning.
 · JIT Compilation - Compilation Just-In-Time pour performances
 · Optimisations avancées - Tree-shaking, dead code elimination
 
-[1.3.0] - 2025-03-15 (planifié)
+[2.3.0] - 2025-03-15 (planifié)
 
 ✨ Nouvelles fonctionnalités
 
@@ -36,7 +36,7 @@ et ce projet suit Semantic Versioning.
 · Bundle size - Packages 30% plus petits
 · Cache - Système de cache intelligent multi-niveaux
 
-[1.2.0] - 2024-11-30
+[2.5.0] - 2024-11-30
 
 ✨ Nouvelles fonctionnalités
 
@@ -65,7 +65,7 @@ et ce projet suit Semantic Versioning.
 · Monitoring - Dashboard de monitoring intégré
 · Analytics - Analytics d'usage des packages
 
-[1.1.0] - 2024-07-20
+[2.7.0] - 2024-07-20
 
 ✨ Nouvelles fonctionnalités
 
@@ -96,7 +96,7 @@ et ce projet suit Semantic Versioning.
 · Alerting - Système d'alertes intelligent
 · Analytics - Analytics détaillées d'usage
 
-[1.0.0] - 2024-01-15
+[2.9.0] - 2024-01-15
 
 🚀 Lancé
 
