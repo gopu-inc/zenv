@@ -39,7 +39,11 @@ class ZenvManifest:
         files = []
         if self.config.has_section('File-build'):
             for key in self.config['File-build']:
-                files.extend([f.strip() for f in self.config['File-build'][key].split('\n') if f.strip()])
+                value = self.config['File-build'][key]
+                if '\n' in value:
+                    files.extend([f.strip() for f in value.split('\n') if f.strip()])
+                else:
+                    files.append(value.strip())
         return files
 
 class ZenvBuilder:
@@ -59,8 +63,8 @@ class ZenvBuilder:
             output_path = Path(output_dir)
             output_path.mkdir(parents=True, exist_ok=True)
             
-            # Create package file name
-            package_file = output_path / f"{package_name}-{package_version}.zc.gs"
+            # Create package file name - CORRIGÉ: .zv au lieu de .zc.gs
+            package_file = output_path / f"{package_name}-{package_version}.zv"
             
             # Create temp directory
             import tempfile
@@ -68,7 +72,24 @@ class ZenvBuilder:
                 tmp_path = Path(tmpdir)
                 
                 # Copy files from manifest
-                self._copy_files(manifest, tmp_path)
+                files = manifest.get_files()
+                print(f"📄 Files to include: {files}")
+                
+                for file_pattern in files:
+                    if '*' in file_pattern:
+                        # Glob pattern
+                        for file_path in Path('.').glob(file_pattern.strip()):
+                            if file_path.is_file():
+                                dest_file = tmp_path / file_path.name
+                                shutil.copy2(file_path, dest_file)
+                                print(f"  ✓ Copied: {file_path}")
+                    else:
+                        # Single file
+                        file_path = Path(file_pattern.strip())
+                        if file_path.exists():
+                            dest_file = tmp_path / file_path.name
+                            shutil.copy2(file_path, dest_file)
+                            print(f"  ✓ Copied: {file_path}")
                 
                 # Create metadata
                 metadata = {
@@ -76,13 +97,14 @@ class ZenvBuilder:
                     'version': package_version,
                     'dependencies': manifest.get_dependencies(),
                     'build_date': str(datetime.datetime.now()),
-                    'builder_version': self.version
+                    'builder_version': self.version,
+                    'files': [f.name for f in tmp_path.iterdir() if f.is_file()]
                 }
                 
                 with open(tmp_path / "metadata.json", "w") as f:
                     json.dump(metadata, f, indent=2)
                 
-                # Create archive
+                # Create archive - CORRIGÉ: .gz simple au lieu de .zc.gs
                 self._create_archive(tmp_path, package_file)
                 
                 # Calculate hash
@@ -103,24 +125,8 @@ class ZenvBuilder:
             traceback.print_exc()
             return ""
     
-    def _copy_files(self, manifest: ZenvManifest, dest_path: Path):
-        files = manifest.get_files()
-        
-        for file_pattern in files:
-            if '*' in file_pattern:
-                # Glob pattern
-                for file_path in Path('.').glob(file_pattern.strip()):
-                    if file_path.is_file():
-                        dest_file = dest_path / file_path.name
-                        shutil.copy2(file_path, dest_file)
-            else:
-                # Single file
-                file_path = Path(file_pattern.strip())
-                if file_path.exists():
-                    dest_file = dest_path / file_path.name
-                    shutil.copy2(file_path, dest_file)
-    
     def _create_archive(self, source_dir: Path, output_path: Path):
+        """Create .tar.gz archive"""
         with tarfile.open(output_path, "w:gz") as tar:
             for file_path in source_dir.rglob("*"):
                 if file_path.is_file():
@@ -133,27 +139,3 @@ class ZenvBuilder:
             for chunk in iter(lambda: f.read(4096), b""):
                 sha256_hash.update(chunk)
         return sha256_hash.hexdigest()
-
-# Example package.zcf:
-"""
-[Zenv]
-name = mon-packs-zenv
-version = 1.0.0
-
-[File-build]
-main = main.py
-files = zenv.zv
-        README.md
-        *.md
-        LICENSE*
-
-[dep.zv]
-request = 1.0.0
-flask = 2.0.0
-
-[docs]
-description = README.md
-
-[license]
-file = LICENSE*
-"""
