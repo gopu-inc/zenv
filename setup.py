@@ -12,19 +12,18 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="gopu.inc",
-    author_email="ceoseshell@gmail.com",  # <-- ajoute ton email si tu veux
+    author_email="ceoseshell@gmail.com",
     url="https://github.com/gopu-inc/zenv",
     project_urls={
         "Documentation": "https://zenv-hub.vercel.app",
         "Source": "https://github.com/gopu-inc/zenv",
         "Tracker": "https://github.com/gopu-inc/zenv/issues",
     },
-    license="MIT",  # ou autre licence si tu préfères
+    license="MIT",
     packages=find_packages(exclude=("tests", "examples")),
-    include_package_data=True,
+    include_package_data=True,  # <-- active MANIFEST.in
     install_requires=[
         "requests>=2.28.0",
-        # ajoute d’autres dépendances si nécessaires
     ],
     extras_require={
         "dev": ["pytest>=7.0", "black", "flake8"],
