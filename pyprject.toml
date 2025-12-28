@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zenv-lang"
-version = "1.0.0"
+version = "2.1.0"
 description = "Zenv Programming Language - Modern transpiler to Python"
 readme = "README.md"
 authors = [
