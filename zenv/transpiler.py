@@ -49,8 +49,9 @@ class ZenvTranspiler:
         r'^class\s+(\w+)\s*:\s*$': r'class \1:',
         r'^class\s+(\w+)\s+extends\s+(\w+)\s*:\s*$': r'class \1(\2):',
         
-        # Print and input
+        # Print and input - CORRIGÉ
         r'^print\s+(.+)$': r'print(\1)',
+        r'print\s+(.+)': r'print(\1)',  # Pour les print en milieu de ligne
         r'^input\(\)$': r'input()',
         r'^input\s+(.+)$': r'input(\1)',
         
@@ -64,17 +65,20 @@ class ZenvTranspiler:
         r'^list\s*\(\s*(.+?)\s*\)$': r'[\1]',
         r'^dict\s*\(\s*\)$': r'{}',
         r'^set\s*\(\s*\)$': r'set()',
+        r'^tuple\s*\(\s*(.+?)\s*\)$': r'(\1,)',
         
-        # String interpolation
+        # String interpolation - CORRIGÉ
         r'`([^`]*)`': r"r'\1'",
         r'string\s*`([^`]*)`': r"'\1'",
         r'"([^"]*)#\{([^}]+)\}([^"]*)"': r'f"\1{\2}\3"',
+        r"'([^']*)#\{([^}]+)\}([^']*)'": r"f'\1{\2}\3'",
         
         # Special operators
         r'(\w+)\s+is\s+(\w+)': r'\1 is \2',
         r'(\w+)\s+is\s+not\s+(\w+)': r'\1 is not \2',
         r'(\w+)\s+and\s+(\w+)': r'\1 and \2',
         r'(\w+)\s+or\s+(\w+)': r'\1 or \2',
+        r'not\s+(\w+)': r'not \1',
         
         # Special methods
         r'^main\s*\(\s*\)\s*:\s*$': r'def main():',
@@ -100,9 +104,23 @@ class ZenvTranspiler:
         
         # Lambdas
         r'lambda\s+(\w+)\s*=>\s*(.+)$': r'lambda \1: \2',
+        r'lambda\s+(\w+),\s*(\w+)\s*=>\s*(.+)$': r'lambda \1, \2: \3',
         
         # Comprehensions
         r'\[for\s+(\w+)\s+in\s+(.+?)\s+if\s+(.+?)\]': r'[\1 for \1 in \2 if \3]',
+        r'\{for\s+(\w+)\s+in\s+(.+?)\s+=>\s+(.+?)\s+if\s+(.+?)\}': r'{\3 for \1 in \2 if \4}',
+        
+        # Built-in functions
+        r'range\s*\(\s*(.+?)\s*\)': r'range(\1)',
+        r'len\s*\(\s*(.+?)\s*\)': r'len(\1)',
+        r'str\s*\(\s*(.+?)\s*\)': r'str(\1)',
+        r'int\s*\(\s*(.+?)\s*\)': r'int(\1)',
+        r'float\s*\(\s*(.+?)\s*\)': r'float(\1)',
+        r'bool\s*\(\s*(.+?)\s*\)': r'bool(\1)',
+        
+        # Special Zenv functions
+        r'map\s*\(\s*(.+?),\s*(.+?)\s*\)': r'map(\1, \2)',
+        r'filter\s*\(\s*(.+?),\s*(.+?)\s*\)': r'filter(\1, \2)',
     }
     
     ZENV_KEYWORDS = {
@@ -122,6 +140,7 @@ class ZenvTranspiler:
         'return': 'return',
         'class': 'class',
         'extends': 'extends',
+        'inherits': 'inherits',
         'print': 'print',
         'input': 'input',
         'var': 'var',
@@ -136,14 +155,17 @@ class ZenvTranspiler:
         'not': 'not',
         'is': 'is',
         'main': 'main',
+        'execute': 'execute',
         'try': 'try',
         'catch': 'catch',
         'finally': 'finally',
         'raise': 'raise',
+        'throw': 'throw',
         'string': 'string',
         'list': 'list',
         'dict': 'dict',
         'set': 'set',
+        'tuple': 'tuple',
         'async': 'async',
         'await': 'await',
         'match': 'match',
@@ -151,6 +173,7 @@ class ZenvTranspiler:
         'lambda': 'lambda',
         'repeat': 'repeat',
         'times': 'times',
+        'each': 'each',
     }
     
     def __init__(self, strict_mode: bool = False):
@@ -176,30 +199,6 @@ class ZenvTranspiler:
             (TokenType.WHITESPACE, r'\s+'),
         ]
     
-    def tokenize(self, code: str) -> List[Token]:
-        tokens = []
-        lines = code.split('\n')
-        
-        for line_num, line in enumerate(lines, 1):
-            pos = 0
-            while pos < len(line):
-                match = None
-                for token_type, pattern in self.token_patterns:
-                    regex = re.compile(pattern)
-                    match = regex.match(line, pos)
-                    if match:
-                        value = match.group(0)
-                        if token_type != TokenType.WHITESPACE:
-                            tokens.append(Token(token_type, value, line_num, pos + 1))
-                        pos = match.end()
-                        break
-                if not match:
-                    if self.strict_mode:
-                        raise SyntaxError(f"Invalid character at line {line_num}, position {pos + 1}")
-                    pos += 1
-        
-        return tokens
-    
     def transpile(self, zv_code: str) -> str:
         self.in_multiline_comment = False
         lines = zv_code.split('\n')
@@ -215,6 +214,10 @@ class ZenvTranspiler:
         original_line = line
         line = line.rstrip()
         
+        # Save indentation
+        indent = len(original_line) - len(original_line.lstrip())
+        
+        # Handle multiline comments
         if self.in_multiline_comment:
             if '*/' in line:
                 self.in_multiline_comment = False
@@ -222,18 +225,20 @@ class ZenvTranspiler:
             return '# ' + line
         
         if '/*' in line and '*/' in line:
-            return line.replace('/*', '"""').replace('*/', '"""')
+            line = line.replace('/*', '"""').replace('*/', '"""')
         elif '/*' in line:
             self.in_multiline_comment = True
-            return line.replace('/*', '"""', 1)
+            line = line.replace('/*', '"""', 1)
         
+        # Apply syntax rules
         for pattern, replacement in self.rules:
             line = pattern.sub(replacement, line)
         
+        # Replace Zenv keywords
         for zenv, python in self.ZENV_KEYWORDS.items():
-            line = re.sub(r'\b' + zenv + r'\b', python, line)
+            # Use word boundaries to avoid partial matches
+            line = re.sub(r'\b' + re.escape(zenv) + r'\b', python, line)
         
-        indent = len(original_line) - len(original_line.lstrip())
         return ' ' * indent + line
     
     def transpile_file(self, input_file: str, output_file: Optional[str] = None) -> str:
@@ -241,15 +246,6 @@ class ZenvTranspiler:
             zv_code = f.read()
         
         python_code = self.transpile(zv_code)
-        
-        if output_file:
-            with open(output_file, 'w', encoding='utf-8') as f:
-                f.write(python_code)
-        
-        return python_code
-    
-    def transpile_to_file(self, source: str, output_file: str) -> str:
-        python_code = self.transpile(source)
         
         if output_file:
             with open(output_file, 'w', encoding='utf-8') as f:
@@ -266,13 +262,3 @@ class ZenvTranspiler:
             return False, str(e)
         except Exception as e:
             return False, f"Validation error: {e}"
-    
-    def format_code(self, zv_code: str) -> str:
-        python_code = self.transpile(zv_code)
-        return python_code
-    
-    def execute_string(self, zv_code: str, args: list = None):
-        python_code = self.transpile(zv_code)
-        exec_globals = {}
-        exec(python_code, exec_globals)
-        return exec_globals
