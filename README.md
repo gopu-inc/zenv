@@ -1,10 +1,13 @@
-<img width="1024" height="1024" alt="IMG_7694" src="https://github.com/user-attachments/assets/4a57a174-fcf5-498e-b3b7-95a0b6e05015" />
+<img width="280" height="280" alt="IMG_7694" src="https://github.com/user-attachments/assets/4a57a174-fcf5-498e-b3b7-95a0b6e05015" />
 
 # 🚀 Zenv - Écosystème de développement complet
+[![PyPI version](https://img.shields.io/pypi/v/zenv-lang.svg)](https://pypi.org/project/zenv-lang/)
 ![Badge](https://zenv-hub.onrender.com/badge/svg/version)
 ![Zenv Version](https://img.shields.io/badge/Zenv-1.0.0-blue)
 ![Python Version](https://img.shields.io/badge/Python-3.7%2B-green)
-![License](https://img.shields.io/badge/License-MIT-yellow)
+![License](https://img.shields.io/badge/License-MIT-black)
+
+
 
 **Zenv** est un écosystème complet de développement qui combine un runtime, un CLI et un gestionnaire de packages, conçu pour simplifier le développement avec une syntaxe Zenv intuitive.
 
@@ -15,7 +18,7 @@
 - **⚡ Transpileur** - Convertit la syntaxe Zenv simplifiée en Python
 - **🌱 Environnements virtuels** - Crée des environnements isolés
 - **🏗️ Système de build** - Construit des packages depuis des manifestes `.zcf`
-- **🔗 Hub intégré** - Publie et installe depuis [zenv-hub.onrender.com](https://zenv-hub.onrender.com)
+- **🔗 Hub intégré** - Publie et installe depuis [zenv-hb](https://zenv-hub.onrender.com)
 
 ## 🚀 Installation rapide
 
@@ -32,7 +35,7 @@ zenv version
 ```
 ## ou via python 🐍
 ```
-pip install zenv
+pip install zenv-lang
 ```
 
 📖 Guide d'utilisation
