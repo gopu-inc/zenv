@@ -1,34 +1,41 @@
 """
-Écosystème Zenv - Runtime, CLI et Package Manager complet
+Zenv Programming Language
+A modern, expressive language that transpiles to Python
 """
 
 __version__ = "1.0.0"
 __author__ = "Zenv Team"
 __license__ = "MIT"
 
-import sys
-import os
-
-# Configuration globale
-ZENV_HOME = os.path.join(os.path.expanduser("~"), ".zenv")
-ZENV_CACHE = os.path.join(ZENV_HOME, "cache")
-ZENV_PACKAGES = os.path.join(ZENV_HOME, "packages")
-
-# Créer les dossiers nécessaires
-for path in [ZENV_HOME, ZENV_CACHE, ZENV_PACKAGES]:
-    os.makedirs(path, exist_ok=True)
-
-# Exports publics
-from .runtime.run import ZenvRuntime
-from .command.com import ZenvCommand, ZenvCLI
-from .transpiler.tra import ZenvTranspiler
-from .builder.build import ZenvBuilder, ZenvManifest
+from .transpiler import ZenvTranspiler
+from .runtime import ZenvRuntime
+from .builder import ZenvBuilder
+from .cli import ZenvCLI
 
 __all__ = [
-    'ZenvRuntime',
-    'ZenvCommand', 
-    'ZenvCLI',
     'ZenvTranspiler',
+    'ZenvRuntime', 
     'ZenvBuilder',
-    'ZenvManifest',
+    'ZenvCLI',
+    'execute',
+    'transpile',
+    'compile'
 ]
+
+def execute(source: str, args: list = None):
+    """Execute Zenv code directly"""
+    from .runtime import ZenvRuntime
+    runtime = ZenvRuntime()
+    return runtime.execute_string(source, args or [])
+
+def transpile(source: str) -> str:
+    """Transpile Zenv code to Python"""
+    from .transpiler import ZenvTranspiler
+    transpiler = ZenvTranspiler()
+    return transpiler.transpile(source)
+
+def compile(source: str, output_file: str = None):
+    """Compile Zenv code to Python file"""
+    from .transpiler import ZenvTranspiler
+    transpiler = ZenvTranspiler()
+    return transpiler.transpile_to_file(source, output_file)
