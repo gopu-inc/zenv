@@ -6,7 +6,7 @@
 ![Zenv Version](https://img.shields.io/badge/Zenv-1.0.0-blue)
 ![Python Version](https://img.shields.io/badge/Python-3.7%2B-green)
 ![License](https://img.shields.io/badge/License-MIT-black)
-
+[![Publish to PyPI](https://github.com/gopu-inc/zenv/actions/workflows/publish-pypi.yml/badge.svg)](https://github.com/gopu-inc/zenv/actions/workflows/publish-pypi.yml)
 
 
 **Zenv** est un écosystème complet de développement qui combine un runtime, un CLI et un gestionnaire de packages, conçu pour simplifier le développement avec une syntaxe Zenv intuitive.
