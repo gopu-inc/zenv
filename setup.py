@@ -1,38 +1,46 @@
 #!/usr/bin/env python3
 """
-Setup configuration pour Zenv Language
+Setup configuration minimal pour Zenv Language
 """
 
 from setuptools import setup, find_packages
 import os
 
 # Lire le README.md pour la description longue
-with open("README.md", "r", encoding="utf-8") as fh:
-    long_description = fh.read()
-
-# Lire les requirements
-with open("requirements.txt", "r", encoding="utf-8") as f:
-    requirements = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+readme_path = os.path.join(os.path.dirname(__file__), "README.md")
+if os.path.exists(readme_path):
+    with open(readme_path, "r", encoding="utf-8") as fh:
+        long_description = fh.read()
+else:
+    long_description = "Zenv Language - Écosystème complet avec hub web"
 
 setup(
     name="zenv-lang",
     version="1.0.0",
     author="gopu.inc",
     author_email="ceoseshell@gmail.com",
-    description="Zenv Language - Écosystème complet avec hub web",
+    description="Zenv Language - Écosystème complet avec hub web zenv-hub.vercel.app",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://zenv-hub.vercel.app",
-    packages=find_packages(include=["zenv.zenv.*", "zenv.*"]),
-    package_data={
-        "zenv": [
-            "*",
-            "*.yaml", 
-            "data/*",
-            "templates/*",
-        ]
+    
+    # Trouver automatiquement les packages
+    packages=find_packages(),
+    
+    # Dépendance unique
+    install_requires=[
+        "requests>=2.28.0",
+    ],
+    
+    # Entry points pour les commandes CLI
+    entry_points={
+        "console_scripts": [
+            "zenv=zenv.__main__:main",
+            "znv=zenv.__main__:main",
+        ],
     },
-    include_package_data=True,
+    
+    # Classifiers pour PyPI
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
@@ -45,26 +53,15 @@ setup(
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
     ],
+    
     python_requires=">=3.7",
-    install_requires=requirements,
-    extras_require={
-        "dev": ["pytest>=7.0.0", "black>=23.0.0", "flake8>=6.0.0"],
-        "hub": ["gunicorn>=20.1.0", "psycopg2-binary>=2.9.0"],
-        "docs": ["sphinx>=7.0.0", "furo>=2023.0.0"],
-    },
-    entry_points={
-        "console_scripts": [
-            "zenv=zenv.__main__:main",
-            "znv=zenv.__main__:main",
-            "zenv-python=zenv.__main__:main",
-        ],
-    },
-    keywords=["zenv", "language", "package-manager", "hub", "transpiler"],
+    
+    # Metadata additionnelle
+    keywords=["zenv", "language", "package-manager", "hub", "python", "env", "environnementvirtuel"],
     project_urls={
         "Homepage": "https://zenv-hub.vercel.app",
-        "Documentation": "https://zenv-hub.vercel.app/docs",
         "Source": "https://github.com/gopu-inc/zenv",
-        "Tracker": "https://github.com/gopu-inc/zenv/issues",
+        "Bug Reports": "https://github.com/gopu-inc/zenv/issues",
         "Hub API": "https://zenv-hub.onrender.com/api",
     },
 )
