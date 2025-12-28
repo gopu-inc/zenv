@@ -7,23 +7,35 @@
 ![Python Version](https://img.shields.io/badge/Python-3.7%2B-green)
 ![License](https://img.shields.io/badge/License-MIT-black)
 [![Publish to PyPI](https://github.com/gopu-inc/zenv/actions/workflows/publish-pypi.yml/badge.svg)](https://github.com/gopu-inc/zenv/actions/workflows/publish-pypi.yml)
+> **Zenv Programming Language powered by gopu.inc**
 
+<div>
+    
+Zenv est un langage de programmation moderne et expressif qui transpile vers Python.
+Une syntaxe élégante, un système de packages complet et une intégration transparente avec Python.
 
-**Zenv** est un écosystème complet de développement qui combine un runtime, un CLI et un gestionnaire de packages, conçu pour simplifier le développement avec une syntaxe Zenv intuitive.
+Installation •
+Documentation •
+Exemples •
+Packages •
+Contribution
 
-## ✨ Fonctionnalités principales
+</div>✨ Fonctionnalités
 
-- **🔄 Runtime Zenv** - Exécute directement les fichiers `.zv` et `.py`
-- **📦 Gestionnaire de packages** - Installe, publie et gère les packages depuis Zenv Hub
-- **⚡ Transpileur** - Convertit la syntaxe Zenv simplifiée en Python
-- **🌱 Environnements virtuels** - Crée des environnements isolés
-- **🏗️ Système de build** - Construit des packages depuis des manifestes `.zcf`
-- **🔗 Hub intégré** - Publie et installe depuis [zenv-hb](https://zenv-hub.onrender.com)
+· Syntaxe moderne - Plus lisible et expressive que Python
+· Transpileur rapide - Conversion Zenv → Python en temps réel
+· Système de packages - Installation, gestion et publication
+· Hub communautaire - Partagez vos packages avec la communauté
+· Interopérabilité Python - Utilisez toutes les bibliothèques Python
+· Type checking optionnel - Support des annotations de type
+· Async/await natif - Programmation asynchrone simplifiée
 
-## 🚀 Installation rapide
+## 🚀 Installation
+
+Installation directe
 
 ```bash
-# Clonez le dépôt
+# Clonez le repository
 git clone https://github.com/gopu-inc/zenv.git
 cd zenv
 
@@ -33,384 +45,525 @@ pip install -e .
 # Vérifiez l'installation
 zenv version
 ```
-## ou via python 🐍
-```
+
+Via pip
+
+```bash
 pip install zenv-lang
 ```
 
-📖 Guide d'utilisation
+## 📖 Documentation Rapide
 
-Commande de base
+Syntaxe de base
+
+```zenv
+// Commentaire simple
+print "Hello Zenv!"
+
+// Variables
+var nom = "Alice"
+let age = 30
+const PI = 3.14159
+
+// Fonctions
+function saluer(personne):
+    return "Bonjour " + personne + "!"
+
+// Conditions
+if age > 18 then:
+    print "Majeur"
+else:
+    print "Mineur"
+
+// Boucles
+for i in range(5) do:
+    print "Itération: " + i
+
+while x > 0 do:
+    print x
+    x = x - 1
+
+// Classes
+class Personne:
+    function __init__(self, nom, age):
+        self.nom = nom
+        self.age = age
+    
+    function presentation(self):
+        return self.nom + " a " + self.age + " ans"
+
+// String interpolation
+let message = "Nom: #{nom}, Age: #{age}"
+```
+
+## Structures de données
+
+```zenv
+// Listes
+let fruits = list("pomme", "banane", "orange")
+fruits.append("kiwi")
+
+// Dictionnaires
+let personne = dict()
+personne["nom"] = "Bob"
+personne["age"] = 25
+
+// Sets
+let nombres = set(1, 2, 3, 3, 4)  // {1, 2, 3, 4}
+
+// Tuples
+let coord = tuple(45.5, -73.5)
+```
+
+## Programmation fonctionnelle
+
+```zenv
+// Lambdas
+let doubler = lambda x => x * 2
+let addition = lambda a, b => a + b
+
+// Map/Filter
+let nombres = [1, 2, 3, 4, 5]
+let carres = map(lambda x => x * x, nombres)
+let pairs = filter(lambda x => x % 2 == 0, nombres)
+
+// List comprehensions
+let carres = [for x in nombres if x > 2 => x * x]
+```
+
+## 🎯 Utilisation
+
+Exécution de code
 
 ```bash
-zenv [commande] [options]
+# Exécuter un fichier .zv
+zenv run programme.zv
+
+# Avec des arguments
+zenv run programme.zv arg1 arg2
+
+# Transpiler vers Python
+zenv transpile programme.zv -o programme.py
+
+# Valider la syntaxe
+zenv validate programme.zv
 ```
 
-Commandes disponibles
+Création de packages
 
-Commande Description Exemple
-run Exécute un fichier .zv ou .py zenv run app.zv
-build Construit un package depuis .zcf zenv build -f package.zcf
-publish Publie sur Zenv Hub zenv publish dist/mon-package.zcf.gs
-install Installe depuis le hub zenv install mon-package
-venv Crée un environnement virtuel zenv venv mon-projet
-init Initialise un projet zenv init mon-package
-search Recherche des packages zenv search "web"
-list Liste les packages installés zenv list
-remove Supprime un package zenv remove mon-package
-info Infos détaillées zenv info mon-package
-hub Gestion du hub zenv hub status
-version Affiche la version zenv version
+• 1. Initialiser un projet :
 
-🎯 Syntaxe Zenv
-
-La syntaxe Zenv est une simplification de Python :
-
-```zv
-# Syntaxe Zenv simplifiée
-print "Bonjour depuis Zenv!"
-
-def saluer(nom):
-    return "Bonjour " + nom + "!"
-
-# Exécution
-if __name__ == "__main__":
-    resultat = saluer("Monde")
-    print resultat
+```bash
+mkdir mon-package
+cd mon-package
 ```
 
-Transpilé en Python :
-
-```python
-print("Bonjour depuis Zenv!")
-
-def saluer(nom):
-    return "Bonjour " + nom + "!"
-
-if __name__ == "__main__":
-    resultat = saluer("Monde")
-    print(resultat)
-```
-
-📦 Manifeste de package (.zcf)
-
-Créez un fichier package.zcf :
+• 1. Créer package.zcf :
 
 ```ini
 [Zenv]
 name = mon-package
 version = 1.0.0
 author = Votre Nom
-description = Mon package Zenv
+description = Description du package
 license = MIT
 
 [File-build]
-main = src/main.zv
-include = 
-    src/**/*.zv
-    src/**/*.py
-    README.md
-exclude =
-    tests/
-    __pycache__/
+main = main.zv
+files = *.zv
+        README.md
+        LICENSE
 
-[Dep.zv]
+[docs]
+description = README.md
+
+[dep.zv]
 # Dépendances Zenv
-zenv-utils = latest
-zenv-web = 2.0.0
+zenv-stdlib = 1.0.0
 
-[Dep.py]
+[dep.py]
 # Dépendances Python
 requests = latest
-flask = >=2.0.0
-
-[Build]
-type = zenv
-output = dist/{name}-{version}.zcf.gs
-compression = gzip
 ```
 
-🛠️ Créer et publier un package
+• 1. Créer main.zv :
 
-1. Initialiser un projet
+```zenv
+print "Mon package Zenv!"
 
-```bash
-zenv init mon-package
-cd mon-package
+function hello(name):
+    return "Hello " + name + "!"
+
+if __name__ == "__main__":
+    print hello("World")
 ```
 
-2. Éditer les fichiers
-
-· Modifiez src/main.zv (votre code Zenv)
-· Configurez package.zcf (manifeste)
-
-3. Construire le package
+• 1. Build le package :
 
 ```bash
 zenv build -f package.zcf
-# Crée dist/mon-package-1.0.0.zcf.gs
+# Génère: dist/mon-package-1.0.0.zv
 ```
 
-4. Se connecter au hub
+## Gestion des packages
 
 ```bash
-zenv hub login votre_token_zenv
-```
+# Se connecter au Zenv Hub
+zenv hub login zenv_votre_token
 
-5. Publier
+# Publier un package
+zenv hub publish dist/mon-package-1.0.0.zv
 
-```bash
-zenv publish dist/mon-package-1.0.0.zcf.gs
-```
-
-🔧 Installation depuis Zenv Hub
-
-```bash
-# Se connecter (optionnel, pour packages privés)
-zenv hub login votre_token_zenv
+# Rechercher des packages
+zenv hub search "web framework"
 
 # Installer un package
-zenv install mon-package
+zenv pkg install requests
 
-# Installer une version spécifique
-zenv install mon-package@1.0.0
-zenv install mon-package==1.0.0
+# Lister les packages installés
+zenv pkg list
 
-# Vérifier l'installation
-zenv list
-zenv info mon-package
-
-# Exécuter
-zenv run ~/.zenv/packages/mon-package/src/main.zv
+# Supprimer un package
+zenv pkg remove package-name
 ```
 
-🌐 Zenv Hub
+## 📦 Zenv Hub
 
-Le hub Zenv est disponible à : https://zenv-hub.onrender.com
+Le Zenv Hub est le registre central des packages Zenv.
+
+## Accès au Hub
+
+· URL: https://zenv-hub.vercel.app
+· Token: zenv_d57203aef4ed4584a0e2986bcded9172375d1903887a......
 
 Endpoints API
 
-· GET /api/packages - Liste tous les packages
-· GET /api/packages/download/{name}/{version} - Télécharge un package
-· POST /api/packages/upload - Upload un package (authentification requise)
-· GET /api/health - Vérifie l'état du serveur
-
-Token d'authentification
-
-Obtenez un token via :
-
-· Interface web du hub
-· Commande zenv hub login
-· Token prédéfini admin : zenv_ead27bf9d1b91e30729eb574a82e7287d4c9f35df9f8feb4f581452444350a5b
-
-🌱 Environnements virtuels
-
 ```bash
-# Créer un environnement
-zenv venv mon-env
+# Vérifier le statut
+zenv hub status
 
-# Activer
-source mon-env/bin/zenv-activate
+# Rechercher des packages
+zenv hub search "database"
 
-# Vérifier
-echo $ZENV_ENV
+# Publier
+zenv hub publish mon-package.zv
 
-# Installer des packages dans l'environnement
-zenv install requests
-
-# Désactiver
-deactivate
+# Télécharger (via pkg install)
+zenv pkg install nom-package
 ```
 
-📁 Structure des fichiers
-
-```
-~/.zenv/
-├── packages/          # Packages installés
-│   └── mon-package/
-│       ├── src/
-│       │   ├── main.zv
-│       │   └── main.py
-│       ├── package.json
-│       └── __init__.py
-├── cache/            # Cache système
-└── token             # Token d'authentification
-```
-
-🧪 Exemples
-
-Exemple 1 : Script simple
-
-hello.zv :
-
-```zv
-print "Hello World!"
-print "Version:", 1.0
-
-def calculer(a, b):
-    return a + b * 2
-
-result = calculer(5, 3)
-print "Résultat:", result
-```
-
-Exécution :
-
-```bash
-zenv run hello.zv
-```
-
-Exemple 2 : Package complet
-
-Structure :
-
-```
-mon-app/
-├── package.zcf
-├── README.md
-└── src/
-    ├── __init__.zv
-    ├── main.zv
-    ├── utils.zv
-    └── config.zv
-```
-
-🔍 Recherche de packages
-
-```bash
-# Rechercher
-zenv search "utils"
-zenv search "web"
-zenv search ""  # Tous les packages
-
-# Infos détaillées
-zenv info zenv-utils
-```
-
-🗑️ Gestion des packages
-
-```bash
-# Lister
-zenv list
-
-# Supprimer
-zenv remove mon-package
-
-# Vérifier
-zenv info mon-package  # "Package non trouvé"
-```
-
-🐛 Dépannage
-
-Problèmes courants
-
-1. "Token manquant"
-   ```bash
-   zenv hub login votre_token
-   ```
-2. Package non trouvé
-   ```bash
-   # Vérifier les packages disponibles
-   zenv search ""
-   # ou
-   curl https://zenv-hub.onrender.com/api/packages
-   ```
-3. Erreur de transpilation
-   · Vérifiez la syntaxe Zenv
-   · Les fichiers doivent être UTF-8
-4. Erreur d'exécution
-   ```bash
-   # Mode debug
-   export ZENV_DEBUG=1
-   zenv run fichier.zv
-   ```
-
-📚 API de développement
-
-Importer dans Python
-
-```python
-from zenv.runtime.run import ZenvRuntime
-from zenv.transpiler.tra import ZenvTranspiler
-from zenv.builder.build import ZenvBuilder
-
-# Runtime
-runtime = ZenvRuntime()
-runtime.execute("script.zv")
-
-# Transpileur
-transpiler = ZenvTranspiler()
-python_code = transpiler.transpile(zv_code)
-
-# Builder
-builder = ZenvBuilder()
-builder.build_from_manifest("package.zcf")
-```
-
-Extension du CLI
-
-```python
-from zenv.command.com import ZenvCLI
-
-class MonCLI(ZenvCLI):
-    def cmd_macommande(self, args):
-        print("Ma commande personnalisée!")
-        return 0
-```
-
-🏗️ Architecture
+## 🏗️ Architecture
 
 ```
 zenv/
-├── __init__.py          # Configuration globale
-├── __main__.py          # Point d'entrée
-├── runtime/             # Runtime d'exécution
+├── zenv/                    # Code source
 │   ├── __init__.py
-│   └── run.py
-├── command/             # Commandes CLI
-│   ├── __init__.py
-│   └── com.py
-├── transpiler/          # Transpileur Zenv→Python
-│   ├── __init__.py
-│   └── tra.py
-├── builder/             # Système de build
-│   ├── __init__.py
-│   └── build.py
-└── tests/               # Tests unitaires
+│   ├── cli.py              # Interface en ligne de commande
+│   ├── transpiler.py       # Transpileur Zenv → Python
+│   ├── runtime.py          # Runtime d'exécution
+│   ├── builder.py          # Système de build de packages
+│   ├── hub/                # Client pour Zenv Hub
+│   └── utils/              # Utilitaires
+├── examples/               # Exemples de code
+├── tests/                  # Tests unitaires
+├── setup.py               # Configuration d'installation
+└── README.md              # Ce fichier
 ```
 
-🤝 Contribution
+## Structure de transpilation
 
-1. Forkez le projet
-2. Créez une branche (git checkout -b feature/ma-fonctionnalite)
-3. Commitez (git commit -am 'Ajout de ma fonctionnalité')
-4. Pushez (git push origin feature/ma-fonctionnalite)
-5. Créez une Pull Request
+```
+Zenv Code (.zv) → Transpileur → Python Code (.py) → Interpréteur Python
+     │                              │
+     ├── Syntaxe moderne           ├── Compatible Python 3.7+
+     ├── String interpolation      ├── Performance native
+     └── Mot-clés en français      └── Accès à tout l'écosystème Python
+```
 
-📄 License
+## 📚 Exemples Complets
 
-MIT License - Voir le fichier LICENSE pour plus de détails.
+Exemple 1: Application Web
 
-🙏 Remerciements
+```zenv
+// webapp.zv
+from flask import Flask, jsonify
+import json
 
-· Python - Le langage de base
-· Render - Hébergement du Zenv Hub
-· GitHub - Hébergement du code
+app = Flask(__name__)
 
-📞 Support
+class Utilisateur:
+    function __init__(self, nom, email):
+        self.nom = nom
+        self.email = email
+    
+    function to_dict(self):
+        return {
+            "nom": self.nom,
+            "email": self.email
+        }
 
-· Issues GitHub : https://github.com/gopu-inc/zenv/issues
-· Email : support@zenv.dev
+@app.route("/")
+function accueil():
+    return "Bienvenue sur mon app Zenv!"
+
+@app.route("/api/utilisateurs")
+function get_utilisateurs():
+    utilisateurs = [
+        Utilisateur("Alice", "alice@example.com"),
+        Utilisateur("Bob", "bob@example.com")
+    ]
+    return jsonify([u.to_dict() for u in utilisateurs])
+
+if __name__ == "__main__":
+    app.run(debug=true)
+```
+
+## Exemple 2: Traitement de données
+
+```zenv
+// data_processing.zv
+function charger_donnees(fichier):
+    with open(fichier, 'r') as f:
+        return json.load(f)
+
+function traiter(donnees):
+    // Filtre
+    let filtrees = filter(lambda x: x["actif"], donnees)
+    
+    // Transformation
+    let transformees = map(lambda x: {
+        "nom": x["nom"].upper(),
+        "valeur": x["score"] * 2
+    }, filtrees)
+    
+    // Agrégation
+    let total = reduce(lambda acc, x: acc + x["valeur"], transformees, 0)
+    
+    return {
+        "nombre": len(transformees),
+        "total": total,
+        "moyenne": total / len(transformees) if transformees else 0
+    }
+
+function main():
+    let donnees = charger_donnees("data.json")
+    let resultats = traiter(donnees)
+    print "Résultats: " + str(resultats)
+
+if __name__ == "__main__":
+    main()
+```
+
+## Exemple 3: Async/Await
+
+```zenv
+// async_demo.zv
+import asyncio
+import aiohttp
+
+async function fetch_url(url):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            return await response.text()
+
+async function main():
+    let urls = [
+        "https://api.example.com/data1",
+        "https://api.example.com/data2",
+        "https://api.example.com/data3"
+    ]
+    
+    // Exécution parallèle
+    let tasks = [fetch_url(url) for url in urls]
+    let results = await asyncio.gather(*tasks)
+    
+    for i, result in enumerate(results):
+        print f"Résultat {i}: {len(result)} caractères"
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## 🔧 Configuration
+
+Fichier de configuration utilisateur
+
+```json
+// ~/.zenv/config.json
+{
+    "user": {
+        "name": "Votre Nom",
+        "email": "votre@email.com"
+    },
+    "hub": {
+        "url": "https://zenv-hub.onrender.com",
+        "auto_update": true
+    },
+    "transpiler": {
+        "strict_mode": false,
+        "auto_format": true
+    }
+}
+```
+
+Variables d'environnement
+
+```bash
+export ZENV_HUB_TOKEN="zenv_votre_token"
+export ZENV_DEBUG="true"
+export ZENV_CACHE_DIR="$HOME/.zenv/cache"
+```
+
+## 📊 Comparaison avec Python
+
+Fonctionnalité Zenv Python
+String interpolation "Nom: #{nom}" f"Nom: {nom}"
+Déclaration fonction function nom(): def nom():
+Condition if x then: if x:
+Boucle for for i in range(5) do: for i in range(5):
+Variables immuables let x = 5 x = 5
+Classes class Nom: class Nom: Import from module import func from module import func
+
+## 🚢 Déploiement
+
+#### Pour les applications
+
+```bash
+# 1. Transpiler vers Python
+zenv transpile app.zv -o app.py
+
+# 2. Créer requirements.txt
+echo "flask==2.3.0" > requirements.txt
+
+# 3. Déployer comme une app Python normale
+```
+
+## Pour les packages
+
+```bash
+# 1. Build le package
+zenv build -f package.zcf
+
+# 2. Publier sur le hub
+zenv hub publish dist/*.zv
+
+# 3. Les autres peuvent installer
+zenv pkg install votre-package
+```
+
+## 🧪 Tests
+
+Tests unitaires
+
+```bash
+# Exécuter tous les tests
+python -m pytest tests/
+
+# Tests spécifiques
+python -m pytest tests/test_transpiler.py
+
+# Avec couverture
+python -m pytest --cov=zenv tests/
+```
+
+## Exemple de test
+
+```python
+# tests/test_basics.py
+import pytest
+from zenv.transpiler import ZenvTranspiler
+
+def test_print_statement():
+    transpiler = ZenvTranspiler()
+    zv_code = 'print "Hello"'
+    python_code = transpiler.transpile(zv_code)
+    assert python_code == 'print("Hello")'
+```
+
+## 🤝 Contribution
+
+Les contributions sont les bienvenues !
+
+Processus de contribution
+
+1. Fork le projet
+2. Créer une branche (git checkout -b feature/ma-fonctionnalite)
+3. Commit les changements (git commit -m 'Ajout de ma fonctionnalité')
+4. Push vers la branche (git push origin feature/ma-fonctionnalite)
+5. Ouvrir une Pull Request
+
+## Guide de style
+
+· Suivre PEP 8 pour le code Python
+· Documenter les nouvelles fonctions
+· Ajouter des tests pour les nouvelles fonctionnalités
+· Mettre à jour la documentation
+
+## 📄 Licence
+
+Ce projet est sous licence MIT. Voir le fichier LICENSE pour plus de détails.
+
+## 🙏 Remerciements
+
+· Python - Pour l'écosystème incroyable
+· Flask - Pour l'inspiration de simplicité
+· La communauté open-source - Pour toutes les contributions
+
+## 📞 Support
+
+· Issues GitHub: Signaler un bug
+· Documentation: Lire la docs
+· Communauté: Rejoindre le Discord
 
 ---
 
-Zenv - Simplifiez votre développement avec une syntaxe intuitive et un écosystème complet. 🚀
+<div align="center">Zenv - Écrivez moins, faites plus.
+Un langage moderne pour des développeurs modernes.
+
+🚀 Commencer maintenant •
+📚 Voir les exemples •
+📦 Explorer les packages
+
+</div>📝 Journal des versions
+
+v1.0.0 (Actuel)
+
+· ✅ Transpileur complet Zenv → Python
+· ✅ Système de packages fonctionnel
+· ✅ Zenv Hub avec publication/téléchargement
+· ✅ CLI intuitive avec toutes les commandes
+· ✅ Support async/await
+· ✅ String interpolation
+· ✅ Classes et héritage
+
+Prochaines versions
+
+· Système de modules amélioré
+· Type checking statique
+· Débogueur intégré
+· IDE extensions (VS Code, PyCharm)
+· Compilation vers WebAssembly
+· Support multi-threading avancé
+
+🔗 Liens utiles
+
+· [📖 Documentation complète](https://zenv-hub.vercel.app/#)
+· [🐛 Signaler probleme](https://github.com/gopu-inc/zenv/issues)
+· [💡 Suggestions de fonctionnalités](https://pypi.org/project/zenv-lang)
+· [📦 Packages populaires](https://zenv-hub.onrender.com/api/packages/download/test-package/1.0.0)
+· [👥 Communauté Discord](https://discord.gg/qWx5DszrC)
+
 ---
 
-## 🎉 Prochaines étapes
+<div align="center">💝 Soutenez le projet
 
-1. **Ajouter plus de syntaxe Zenv** - Plus de simplifications
-2. **Interface web pour le hub** - Interface utilisateur graphique
-3. **Plugins** - Système d'extensions
-4. **Intégration CI/CD** - Tests automatiques
-5. **Documentation API** - Documentation détaillée
+Si Zenv vous est utile, pensez à :
+
+· ⭐ Star le projet sur GitHub
+· 🐛 Signaler les bugs
+· 💡 Proposer des fonctionnalités
+· 📢 Parler de Zenv autour de vous
+
+Ensemble, construisons l'avenir de la programmation !
+
+</div>
