@@ -3,6 +3,7 @@
 # 🚀 Zenv - Écosystème de développement complet
 <div align="center">
 
+![version: 2.1.0](https://zenv-hub.onrender.com/badge/svg/ZENV)
 [![PyPI Version](https://img.shields.io/pypi/v/zenv-lang?style=for-the-badge&logo=pypi&logoColor=white&color=blue)](https://pypi.org/project/zenv-lang/)
 [![Python Version](https://img.shields.io/pypi/pyversions/zenv-lang?style=for-the-badge&logo=python&logoColor=white&color=3776AB)](https://pypi.org/project/zenv-lang/)
 [![License](https://img.shields.io/pypi/l/zenv-lang?style=for-the-badge&color=black)](https://opensource.org/licenses/MIT)
