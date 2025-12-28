@@ -4,6 +4,7 @@ import os
 import json
 import tarfile
 import tempfile
+import shutil
 from pathlib import Path
 from typing import List, Optional
 
@@ -22,69 +23,49 @@ class ZenvCLI:
         self.hub = ZenvHubClient()
         
     def run(self, args: List[str]) -> int:
-        parser = argparse.ArgumentParser(
-            prog="zenv",
-            description="Zenv Programming Language"
-        )
-        
+        parser = argparse.ArgumentParser(prog="zenv")
         subparsers = parser.add_subparsers(dest="command", help="Commands")
         
-        # Run command
+        # Commande run
         run_parser = subparsers.add_parser("run", help="Run Zenv file")
-        run_parser.add_argument("file", help=".zv or .zenv file")
+        run_parser.add_argument("file", help=".zv file")
         run_parser.add_argument("args", nargs="*", help="Arguments")
         
-        # Transpile command
+        # Commande transpile
         transpile_parser = subparsers.add_parser("transpile", help="Transpile to Python")
         transpile_parser.add_argument("file", help="Input file")
         transpile_parser.add_argument("-o", "--output", help="Output file")
         
-        # Build command
+        # Commande build
         build_parser = subparsers.add_parser("build", help="Build package")
         build_parser.add_argument("--n", dest="name", help="Package name")
         build_parser.add_argument("-f", "--file", default="package.zcf", help="Manifest file")
         build_parser.add_argument("-o", "--output", default="dist", help="Output directory")
         
-        # Package commands
+        # Commande pkg
         pkg_parser = subparsers.add_parser("pkg", help="Package management")
         pkg_sub = pkg_parser.add_subparsers(dest="pkg_command")
         
-        install_parser = pkg_sub.add_parser("install", help="Install package")
-        install_parser.add_argument("package", help="Package name")
-        install_parser.add_argument("--version", default="latest", help="Version")
-        
+        pkg_sub.add_parser("install", help="Install package").add_argument("package", help="Package name")
         pkg_sub.add_parser("list", help="List packages")
+        pkg_sub.add_parser("remove", help="Remove package").add_argument("package", help="Package name")
         
-        remove_parser = pkg_sub.add_parser("remove", help="Remove package")
-        remove_parser.add_argument("package", help="Package name")
-        
-        # Hub commands
+        # Commande hub
         hub_parser = subparsers.add_parser("hub", help="Zenv Hub")
         hub_sub = hub_parser.add_subparsers(dest="hub_command")
         
         hub_sub.add_parser("status", help="Check hub status")
-        
-        login_parser = hub_sub.add_parser("login", help="Login to hub")
-        login_parser.add_argument("token", nargs="?", help="Auth token")
-        
+        hub_sub.add_parser("login", help="Login to hub").add_argument("token", help="Auth token")
         hub_sub.add_parser("logout", help="Logout")
+        hub_sub.add_parser("search", help="Search packages").add_argument("query", help="Search query")
+        hub_sub.add_parser("publish", help="Publish package").add_argument("file", help="Package file")
         
-        search_parser = hub_sub.add_parser("search", help="Search packages")
-        search_parser.add_argument("query", help="Search query")
-        
-        publish_parser = hub_sub.add_parser("publish", help="Publish package")
-        publish_parser.add_argument("file", help="Package file")
-        
-        pull_parser = hub_sub.add_parser("pull", help="Pull package")
-        pull_parser.add_argument("package", help="Package name")
-        pull_parser.add_argument("--version", default="latest", help="Version")
-        
-        # Version
+        # Commande version
         subparsers.add_parser("version", help="Show version")
         
-        # Install site
-        site_parser = subparsers.add_parser("site", help="Install to site-packages")
-        site_parser.add_argument("package", help="Package name or file")
+        # Commande site (installation locale)
+        site_parser = subparsers.add_parser("site", help="Install to site directory")
+        site_parser.add_argument("file", help="Package file")
         
         if not args:
             parser.print_help()
@@ -106,7 +87,7 @@ class ZenvCLI:
             print(f"Zenv v{__version__}")
             return 0
         elif parsed.command == "site":
-            return self._cmd_site(parsed.package)
+            return self._cmd_site(parsed.file)
         else:
             parser.print_help()
             return 1
@@ -157,7 +138,7 @@ file = LICENSE*
     
     def _cmd_pkg(self, parsed):
         if parsed.pkg_command == "install":
-            return self._install_package(parsed.package, parsed.version)
+            return self._install_package(parsed.package)
         elif parsed.pkg_command == "list":
             return self._list_packages()
         elif parsed.pkg_command == "remove":
@@ -174,21 +155,17 @@ file = LICENSE*
             else:
                 print("❌ Zenv Hub: Offline")
                 return 1
-                
         elif parsed.hub_command == "login":
-            token = parsed.token or input("Enter your Zenv Hub token: ")
-            if self.hub.login(token):
+            if self.hub.login(parsed.token):
                 print("✅ Logged in to Zenv Hub")
                 return 0
             else:
                 print("❌ Login failed")
                 return 1
-                
         elif parsed.hub_command == "logout":
             self.hub.logout()
             print("✅ Logged out")
             return 0
-            
         elif parsed.hub_command == "search":
             results = self.hub.search_packages(parsed.query)
             if results:
@@ -198,54 +175,77 @@ file = LICENSE*
             else:
                 print("🔍 No packages found")
             return 0
-            
         elif parsed.hub_command == "publish":
-            return self._publish_package(parsed.file)
-            
-        elif parsed.hub_command == "pull":
-            return self._pull_package(parsed.package)
-            
+            if self.hub.upload_package(parsed.file):
+                return 0
+            else:
+                return 1
         else:
             print(f"❌ Unknown hub command: {parsed.hub_command}")
             return 1
     
-    def _cmd_site(self, package: str) -> int:
-        """Installer un package dans site-packages"""
-        if os.path.exists(package):
-            # Local file
-            return self._install_from_file(package)
-        else:
-            # From hub
-            return self._pull_and_install(package)
+    def _cmd_site(self, package_file: str) -> int:
+        """Installer un package localement"""
+        if not os.path.exists(package_file):
+            print(f"❌ File not found: {package_file}")
+            return 1
+        
+        print(f"📦 Installing local package: {package_file}")
+        
+        # Créer le dossier site
+        site_dir = Path("/usr/bin/zenv-site/c82")
+        site_dir.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            # Extraire le nom du package
+            with tarfile.open(package_file, 'r:gz') as tar:
+                # Chercher metadata.json
+                metadata = None
+                for member in tar.getmembers():
+                    if member.name.endswith('metadata.json'):
+                        f = tar.extractfile(member)
+                        if f:
+                            metadata = json.load(f)
+                            break
+                
+                if metadata:
+                    package_name = metadata.get('name', Path(package_file).stem)
+                else:
+                    package_name = Path(package_file).stem.replace('.zv', '')
+                
+                package_dir = site_dir / package_name
+                if package_dir.exists():
+                    shutil.rmtree(package_dir)
+                package_dir.mkdir()
+                
+                # Extraire
+                tar.extractall(package_dir)
+                
+                print(f"✅ Installed: {package_name}")
+                print(f"📁 Location: {package_dir}")
+                return 0
+                
+        except Exception as e:
+            print(f"❌ Installation error: {e}")
+            return 1
     
-    def _install_package(self, package_name: str, version: str) -> int:
-        print(f"📦 Installing {package_name}@{version}...")
+    def _install_package(self, package_name: str) -> int:
+        print(f"📦 Installing {package_name}...")
         
         # Télécharger depuis le hub
-        content = self.hub.download_package(package_name, version)
+        content = self.hub.download_package(package_name)
         if not content:
             print(f"❌ Package not found: {package_name}")
             return 1
         
-        # Installer dans site-packages
-        site_dir = Path("/usr/bin/zenv-site/c82")
-        site_dir.mkdir(parents=True, exist_ok=True)
-        
-        package_dir = site_dir / package_name
-        package_dir.mkdir(exist_ok=True)
-        
-        # Extraire
-        with tempfile.NamedTemporaryFile(suffix='.zc.gs', delete=False) as tmp:
+        # Sauvegarder temporairement
+        with tempfile.NamedTemporaryFile(suffix='.zv', delete=False) as tmp:
             tmp.write(content)
             tmp_path = tmp.name
         
         try:
-            with tarfile.open(tmp_path, 'r:gz') as tar:
-                tar.extractall(package_dir)
-            
-            print(f"✅ Installed: {package_name}@{version}")
-            print(f"📁 Location: {package_dir}")
-            return 0
+            # Installer localement
+            return self._cmd_site(tmp_path)
         finally:
             os.unlink(tmp_path)
     
@@ -284,79 +284,6 @@ file = LICENSE*
             print(f"❌ Package not found: {package_name}")
             return 1
         
-        import shutil
         shutil.rmtree(package_dir)
         print(f"✅ Removed: {package_name}")
         return 0
-    
-    def _publish_package(self, package_file: str) -> int:
-        if not self.hub.is_logged_in():
-            print("❌ Not logged in. Use: zenv hub login <token>")
-            return 1
-        
-        # Extraire les métadonnées
-        try:
-            with tarfile.open(package_file, 'r:gz') as tar:
-                # Chercher metadata.json
-                for member in tar.getmembers():
-                    if member.name.endswith('metadata.json'):
-                        f = tar.extractfile(member)
-                        if f:
-                            metadata = json.load(f)
-                            name = metadata.get('name', 'unknown')
-                            version = metadata.get('version', '1.0.0')
-                            description = metadata.get('description', '')
-                            
-                            if self.hub.upload_package(package_file, name, version, description):
-                                return 0
-                            else:
-                                return 1
-        except:
-            pass
-        
-        # Fallback: utiliser le nom du fichier
-        filename = os.path.basename(package_file)
-        name = filename.split('-')[0] if '-' in filename else filename.replace('.zc.gs', '')
-        
-        if self.hub.upload_package(package_file, name, '1.0.0', f'Package {name}'):
-            return 0
-        else:
-            return 1
-    
-    def _pull_package(self, package_name: str) -> int:
-        return self._install_package(package_name, "latest")
-    
-    def _install_from_file(self, file_path: str) -> int:
-        """Installer depuis un fichier local"""
-        print(f"📦 Installing from file: {file_path}")
-        
-        site_dir = Path("/usr/bin/zenv-site/c82")
-        site_dir.mkdir(parents=True, exist_ok=True)
-        
-        try:
-            with tarfile.open(file_path, 'r:gz') as tar:
-                # Trouver le nom du package
-                package_name = "unknown"
-                for member in tar.getmembers():
-                    if member.name.endswith('metadata.json'):
-                        f = tar.extractfile(member)
-                        if f:
-                            metadata = json.load(f)
-                            package_name = metadata.get('name', 'unknown')
-                            break
-                
-                package_dir = site_dir / package_name
-                package_dir.mkdir(exist_ok=True)
-                
-                tar.extractall(package_dir)
-                
-                print(f"✅ Installed: {package_name}")
-                print(f"📁 Location: {package_dir}")
-                return 0
-        except Exception as e:
-            print(f"❌ Installation error: {e}")
-            return 1
-    
-    def _pull_and_install(self, package_name: str) -> int:
-        """Télécharger et installer depuis le hub"""
-        return self._install_package(package_name, "latest")
