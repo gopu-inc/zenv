@@ -210,7 +210,7 @@ class AuthManager:
         print(f"\n{Colors.highlight('═' * 50)}")
         print(f"{Colors.highlight('AUTHENTIFICATION REQUISE')}")
         print(f"{Colors.highlight('═' * 50)}")
-        print(f"{Colors.info("Pour utiliser cette fonctionnalité, vous avez besoin d'un token.")}")
+        print(f"{Colors.info('Pour utiliser cette fonctionnalité, vous avez besoin d\\'un token.')}")
         print(f"\n{Colors.highlight('1. Rendez-vous sur:')}")
         print(f"   {Colors.color(ZENV_TOKEN_PAGE, Colors.CYAN)}")
         print(f"\n{Colors.highlight('2. Connectez-vous ou créez un compte')}")
@@ -328,7 +328,7 @@ class ZenvCLI:
     def _setup_signal_handler(self):
         """Configurer le gestionnaire de signal Ctrl+C"""
         def signal_handler(sig, frame):
-            print(f"\n{Colors.highlight('ZENV - ARRÊT DÉMANDÉ PAR L\'UTILISATEUR')}")
+            print(f"\n{Colors.highlight('ZENV - ARRÊT DÉMANDÉ PAR L\\'UTILISATEUR')}")
             sys.exit(130)
         
         signal.signal(signal.SIGINT, signal_handler)
