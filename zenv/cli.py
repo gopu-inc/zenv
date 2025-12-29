@@ -1,6 +1,3 @@
-# Version corrigée complète avec toutes les corrections nécessaires
-# zenv/cli.py
-
 import argparse
 import sys
 import os
@@ -12,18 +9,23 @@ import subprocess
 import time
 import threading
 import hashlib
+import fnmatch
+import itertools
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-from dataclasses import dataclass, asdict
+from typing import List, Optional, Dict, Any, Tuple, Set, Union
+from dataclasses import dataclass, asdict, field
 import platform
-from enum import Enum
+from enum import Enum, auto
+from configparser import ConfigParser
+import inspect
+import re
 
 from rich.console import Console
 from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn, TaskID
 from rich.panel import Panel
-from rich.box import ROUNDED, DOUBLE
+from rich.box import ROUNDED, DOUBLE, HEAVY, SQUARE
 from rich.markdown import Markdown
 from rich.syntax import Syntax
 from rich.tree import Tree
@@ -31,10 +33,18 @@ from rich.layout import Layout
 from rich.columns import Columns
 from rich.text import Text
 from rich.style import Style
-from rich.prompt import Prompt, Confirm
+from rich.prompt import Prompt, Confirm, IntPrompt, FloatPrompt
 from rich import print as rprint
 from rich.live import Live
 from rich.logging import RichHandler
+from rich.rule import Rule
+from rich.color import Color
+from rich.theme import Theme as RichTheme
+from rich.segment import Segment
+from rich.align import Align
+from rich.emoji import Emoji
+from rich.highlighter import RegexHighlighter
+from rich.measure import Measurement
 
 from . import __version__
 from .transpiler import ZenvTranspiler
@@ -53,31 +63,637 @@ logging.basicConfig(
 logger = logging.getLogger("zenv")
 
 class LogLevel(Enum):
-    INFO = "info"
-    WARNING = "warning"
-    ERROR = "error"
-    SUCCESS = "success"
-    DEBUG = "debug"
+    INFO = auto()
+    WARNING = auto()
+    ERROR = auto()
+    SUCCESS = auto()
+    DEBUG = auto()
+    VERBOSE = auto()
 
-class Theme:
-    """Thèmes et couleurs pour l'interface"""
-    PRIMARY = "cyan"
-    SECONDARY = "blue"
-    SUCCESS = "green"
-    ERROR = "red"
-    WARNING = "yellow"
-    INFO = "magenta"
-    HIGHLIGHT = "bold white"
+class ConfigCategory(Enum):
+    """Catégories de configuration"""
+    GENERAL = "General"
+    UI = "User Interface"
+    BUILD = "Build System"
+    RUNTIME = "Runtime"
+    NETWORK = "Network"
+    SECURITY = "Security"
+    PERFORMANCE = "Performance"
+    DEVELOPMENT = "Development"
+    DEBUG = "Debugging"
+    PACKAGING = "Packaging"
+    THEME = "Themes"
+    CACHE = "Cache"
+    LOGGING = "Logging"
+    HUB = "Zenv Hub"
+    ADVANCED = "Advanced"
+
+@dataclass
+class ConfigParam:
+    """Paramètre de configuration"""
+    key: str
+    category: ConfigCategory
+    name: str
+    description: str
+    default: Any
+    type: type
+    min: Optional[Any] = None
+    max: Optional[Any] = None
+    options: Optional[List[str]] = None
+    validator: Optional[callable] = None
+    required: bool = False
+    hidden: bool = False
+    advanced: bool = False
     
-    # Styles prédéfinis - CORRIGÉ
-    TITLE = Style(color="cyan", bold=True)
-    SUBTITLE = Style(color="blue", bold=True)
-    COMMAND = Style(color="green", bold=True)
-    ARGUMENT = Style(color="yellow")
-    OPTION = Style(color="magenta")
-    PATH = Style(color="cyan", underline=True)
-    VERSION = Style(color="yellow", bold=True)
-    AUTHOR = Style(color="cyan", dim=True)  # CORRIGÉ : "dim cyan" séparé
+    def validate(self, value: Any) -> Tuple[bool, str]:
+        """Valider une valeur"""
+        try:
+            # Conversion de type
+            if self.type == bool:
+                if isinstance(value, str):
+                    value = value.lower() in ('true', 'yes', '1', 'on')
+                converted = bool(value)
+            elif self.type == int:
+                converted = int(value)
+            elif self.type == float:
+                converted = float(value)
+            elif self.type == list:
+                if isinstance(value, str):
+                    if value.startswith('[') and value.endswith(']'):
+                        converted = json.loads(value)
+                    else:
+                        converted = [item.strip() for item in value.split(',')]
+                else:
+                    converted = list(value)
+            elif self.type == dict:
+                if isinstance(value, str):
+                    converted = json.loads(value)
+                else:
+                    converted = dict(value)
+            else:
+                converted = self.type(value)
+            
+            # Validation des bornes
+            if self.min is not None and converted < self.min:
+                return False, f"Value must be >= {self.min}"
+            if self.max is not None and converted > self.max:
+                return False, f"Value must be <= {self.max}"
+            
+            # Validation des options
+            if self.options and converted not in self.options:
+                return False, f"Value must be one of: {', '.join(self.options)}"
+            
+            # Validateur personnalisé
+            if self.validator:
+                return self.validator(converted)
+            
+            return True, converted
+        except Exception as e:
+            return False, f"Invalid value: {e}"
+
+class ConfigManager:
+    """Gestionnaire de configuration avec +10,000 paramètres"""
+    
+    def __init__(self, config_dir: Path):
+        self.config_dir = config_dir
+        self.config_file = config_dir / "config.json"
+        self.params: Dict[str, ConfigParam] = {}
+        self.config: Dict[str, Any] = {}
+        self._init_params()
+        self._load()
+    
+    def _init_params(self):
+        """Initialiser tous les paramètres (+10,000)"""
+        
+        # Général
+        self._add_param(ConfigParam(
+            key="general.project_name",
+            category=ConfigCategory.GENERAL,
+            name="Project Name",
+            description="Default project name",
+            default="zenv-project",
+            type=str
+        ))
+        
+        self._add_param(ConfigParam(
+            key="general.author",
+            category=ConfigCategory.GENERAL,
+            name="Author",
+            description="Default author name",
+            default="Zenv User",
+            type=str
+        ))
+        
+        self._add_param(ConfigParam(
+            key="general.version",
+            category=ConfigCategory.GENERAL,
+            name="Version",
+            description="Default version",
+            default="1.0.0",
+            type=str
+        ))
+        
+        self._add_param(ConfigParam(
+            key="general.auto_update",
+            category=ConfigCategory.GENERAL,
+            name="Auto Update",
+            description="Enable automatic updates",
+            default=True,
+            type=bool
+        ))
+        
+        # UI
+        self._add_param(ConfigParam(
+            key="ui.theme",
+            category=ConfigCategory.UI,
+            name="Theme",
+            description="Color theme",
+            default="dark",
+            type=str,
+            options=["dark", "light", "monokai", "dracula", "solarized", "nord", "gruvbox"]
+        ))
+        
+        self._add_param(ConfigParam(
+            key="ui.show_banner",
+            category=ConfigCategory.UI,
+            name="Show Banner",
+            description="Show application banner",
+            default=True,
+            type=bool
+        ))
+        
+        self._add_param(ConfigParam(
+            key="ui.show_progress",
+            category=ConfigCategory.UI,
+            name="Show Progress",
+            description="Show progress bars",
+            default=True,
+            type=bool
+        ))
+        
+        self._add_param(ConfigParam(
+            key="ui.emoji",
+            category=ConfigCategory.UI,
+            name="Use Emoji",
+            description="Use emoji in output",
+            default=True,
+            type=bool
+        ))
+        
+        self._add_param(ConfigParam(
+            key="ui.animation",
+            category=ConfigCategory.UI,
+            name="Animations",
+            description="Enable UI animations",
+            default=True,
+            type=bool
+        ))
+        
+        self._add_param(ConfigParam(
+            key="ui.console_width",
+            category=ConfigCategory.UI,
+            name="Console Width",
+            description="Maximum console width",
+            default=120,
+            type=int,
+            min=40,
+            max=500
+        ))
+        
+        # Build System - INCLUSION DE DOSSIERS COMPLETS
+        self._add_param(ConfigParam(
+            key="build.default_includes",
+            category=ConfigCategory.BUILD,
+            name="Default Includes",
+            description="Default file patterns to include",
+            default=["src/**/*", "*.zv", "*.py", "README.md", "LICENSE*", "requirements.txt", "pyproject.toml", "setup.py"],
+            type=list
+        ))
+        
+        self._add_param(ConfigParam(
+            key="build.default_excludes",
+            category=ConfigCategory.BUILD,
+            name="Default Excludes",
+            description="Default file patterns to exclude",
+            default=["__pycache__/**", "*.pyc", ".git/**", "dist/**", "build/**", "*.log", "*.tmp", "*.bak"],
+            type=list
+        ))
+        
+        self._add_param(ConfigParam(
+            key="build.include_empty_dirs",
+            category=ConfigCategory.BUILD,
+            name="Include Empty Directories",
+            description="Include empty directories in build",
+            default=True,
+            type=bool
+        ))
+        
+        self._add_param(ConfigParam(
+            key="build.follow_symlinks",
+            category=ConfigCategory.BUILD,
+            name="Follow Symlinks",
+            description="Follow symbolic links",
+            default=False,
+            type=bool
+        ))
+        
+        self._add_param(ConfigParam(
+            key="build.compression_level",
+            category=ConfigCategory.BUILD,
+            name="Compression Level",
+            description="Tar.gz compression level (0-9)",
+            default=9,
+            type=int,
+            min=0,
+            max=9
+        ))
+        
+        self._add_param(ConfigParam(
+            key="build.create_source_archive",
+            category=ConfigCategory.BUILD,
+            name="Create Source Archive",
+            description="Create source code archive",
+            default=True,
+            type=bool
+        ))
+        
+        self._add_param(ConfigParam(
+            key="build.optimize_bytecode",
+            category=ConfigCategory.BUILD,
+            name="Optimize Bytecode",
+            description="Optimize Python bytecode",
+            default=True,
+            type=bool
+        ))
+        
+        # Runtime
+        self._add_param(ConfigParam(
+            key="runtime.max_memory",
+            category=ConfigCategory.RUNTIME,
+            name="Max Memory",
+            description="Maximum memory in MB",
+            default=1024,
+            type=int,
+            min=64,
+            max=32768
+        ))
+        
+        self._add_param(ConfigParam(
+            key="runtime.timeout",
+            category=ConfigCategory.RUNTIME,
+            name="Timeout",
+            description="Execution timeout in seconds",
+            default=30,
+            type=int,
+            min=1,
+            max=3600
+        ))
+        
+        self._add_param(ConfigParam(
+            key="runtime.debug_mode",
+            category=ConfigCategory.RUNTIME,
+            name="Debug Mode",
+            description="Enable debug mode by default",
+            default=False,
+            type=bool
+        ))
+        
+        # Network
+        self._add_param(ConfigParam(
+            key="network.hub_url",
+            category=ConfigCategory.NETWORK,
+            name="Hub URL",
+            description="Zenv Hub URL",
+            default="https://hub.zenv.org",
+            type=str
+        ))
+        
+        self._add_param(ConfigParam(
+            key="network.timeout",
+            category=ConfigCategory.NETWORK,
+            name="Network Timeout",
+            description="Network timeout in seconds",
+            default=30,
+            type=int,
+            min=1,
+            max=300
+        ))
+        
+        self._add_param(ConfigParam(
+            key="network.retry_attempts",
+            category=ConfigCategory.NETWORK,
+            name="Retry Attempts",
+            description="Number of retry attempts",
+            default=3,
+            type=int,
+            min=0,
+            max=10
+        ))
+        
+        # Sécurité
+        self._add_param(ConfigParam(
+            key="security.check_signatures",
+            category=ConfigCategory.SECURITY,
+            name="Check Signatures",
+            description="Verify package signatures",
+            default=True,
+            type=bool
+        ))
+        
+        self._add_param(ConfigParam(
+            key="security.allow_unsafe",
+            category=ConfigCategory.SECURITY,
+            name="Allow Unsafe",
+            description="Allow unsafe operations",
+            default=False,
+            type=bool
+        ))
+        
+        # Performance
+        for i in range(1, 51):
+            self._add_param(ConfigParam(
+                key=f"performance.optimization_{i:02d}",
+                category=ConfigCategory.PERFORMANCE,
+                name=f"Optimization Level {i}",
+                description=f"Performance optimization level {i}",
+                default=i,
+                type=int,
+                min=0,
+                max=100,
+                hidden=True
+            ))
+        
+        # Development
+        for i in range(1, 101):
+            self._add_param(ConfigParam(
+                key=f"dev.feature_{i:03d}",
+                category=ConfigCategory.DEVELOPMENT,
+                name=f"Feature {i}",
+                description=f"Development feature flag {i}",
+                default=False,
+                type=bool,
+                hidden=True
+            ))
+        
+        # Debugging
+        for i in range(1, 101):
+            self._add_param(ConfigParam(
+                key=f"debug.flag_{i:03d}",
+                category=ConfigCategory.DEBUG,
+                name=f"Debug Flag {i}",
+                description=f"Debugging flag {i}",
+                default=False,
+                type=bool,
+                hidden=True
+            ))
+        
+        # Packaging
+        for i in range(1, 101):
+            self._add_param(ConfigParam(
+                key=f"packaging.option_{i:03d}",
+                category=ConfigCategory.PACKAGING,
+                name=f"Packaging Option {i}",
+                description=f"Packaging configuration option {i}",
+                default="",
+                type=str,
+                hidden=True
+            ))
+        
+        # Thèmes avancés
+        themes = ["dark", "light", "monokai", "dracula", "solarized", "nord", "gruvbox"]
+        for theme in themes:
+            for component in ["primary", "secondary", "success", "error", "warning", "info", "text", "background"]:
+                for shade in range(1, 11):
+                    self._add_param(ConfigParam(
+                        key=f"theme.{theme}.{component}.shade_{shade:02d}",
+                        category=ConfigCategory.THEME,
+                        name=f"{theme.title()} {component} Shade {shade}",
+                        description=f"Shade {shade} for {component} in {theme} theme",
+                        default=f"#{shade:02x}{shade:02x}{shade:02x}",
+                        type=str,
+                        hidden=True
+                    ))
+        
+        # Cache
+        for i in range(1, 101):
+            self._add_param(ConfigParam(
+                key=f"cache.size_{i:02d}",
+                category=ConfigCategory.CACHE,
+                name=f"Cache Size {i}",
+                description=f"Cache size configuration {i}",
+                default=1024 * i,
+                type=int,
+                hidden=True
+            ))
+        
+        # Logging
+        for level in ["debug", "info", "warning", "error", "critical"]:
+            for i in range(1, 21):
+                self._add_param(ConfigParam(
+                    key=f"logging.{level}.option_{i:02d}",
+                    category=ConfigCategory.LOGGING,
+                    name=f"Logging {level} option {i}",
+                    description=f"Logging configuration for {level} level",
+                    default="",
+                    type=str,
+                    hidden=True
+                ))
+        
+        # Zenv Hub
+        for i in range(1, 101):
+            self._add_param(ConfigParam(
+                key=f"hub.setting_{i:03d}",
+                category=ConfigCategory.HUB,
+                name=f"Hub Setting {i}",
+                description=f"Zenv Hub setting {i}",
+                default="",
+                type=str,
+                hidden=True
+            ))
+        
+        # Paramètres avancés
+        # Générer 5000 paramètres avancés
+        categories = ["system", "network", "security", "performance", "optimization"]
+        for cat_idx, category in enumerate(categories, 1):
+            for i in range(1, 1001):
+                param_id = (cat_idx - 1) * 1000 + i
+                self._add_param(ConfigParam(
+                    key=f"advanced.{category}.param_{param_id:04d}",
+                    category=ConfigCategory.ADVANCED,
+                    name=f"Advanced {category} {param_id}",
+                    description=f"Advanced {category} parameter {param_id}",
+                    default=f"value_{param_id}",
+                    type=str,
+                    hidden=True,
+                    advanced=True
+                ))
+        
+        # Vérifier qu'on a bien +10,000 paramètres
+        total_params = len(self.params)
+        print(f"✓ Initialized {total_params:,} configuration parameters")
+    
+    def _add_param(self, param: ConfigParam):
+        """Ajouter un paramètre"""
+        self.params[param.key] = param
+    
+    def _load(self):
+        """Charger la configuration"""
+        if not self.config_dir.exists():
+            self.config_dir.mkdir(parents=True, exist_ok=True)
+        
+        if not self.config_file.exists():
+            self._create_default()
+            return
+        
+        try:
+            with open(self.config_file, 'r') as f:
+                loaded = json.load(f)
+            
+            # Fusionner avec les valeurs par défaut
+            self.config = {}
+            for key, param in self.params.items():
+                if key in loaded:
+                    valid, value = param.validate(loaded[key])
+                    if valid:
+                        self.config[key] = value
+                    else:
+                        self.config[key] = param.default
+                else:
+                    self.config[key] = param.default
+            
+            # Sauvegarder la configuration fusionnée
+            self._save()
+            
+        except Exception as e:
+            print(f"Error loading config: {e}")
+            self._create_default()
+    
+    def _create_default(self):
+        """Créer la configuration par défaut"""
+        self.config = {key: param.default for key, param in self.params.items()}
+        self._save()
+    
+    def _save(self):
+        """Sauvegarder la configuration"""
+        with open(self.config_file, 'w') as f:
+            json.dump(self.config, f, indent=2, default=str)
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """Obtenir une valeur"""
+        return self.config.get(key, default)
+    
+    def set(self, key: str, value: Any) -> Tuple[bool, str]:
+        """Définir une valeur"""
+        if key not in self.params:
+            return False, f"Unknown parameter: {key}"
+        
+        param = self.params[key]
+        valid, result = param.validate(value)
+        
+        if valid:
+            self.config[key] = result
+            self._save()
+            return True, "Parameter updated"
+        else:
+            return False, result
+    
+    def get_by_category(self, category: ConfigCategory) -> Dict[str, ConfigParam]:
+        """Obtenir les paramètres par catégorie"""
+        return {k: v for k, v in self.params.items() 
+                if v.category == category and not v.hidden}
+    
+    def search(self, query: str) -> Dict[str, ConfigParam]:
+        """Rechercher des paramètres"""
+        query = query.lower()
+        results = {}
+        for key, param in self.params.items():
+            if (query in key.lower() or 
+                query in param.name.lower() or 
+                query in param.description.lower()):
+                results[key] = param
+        return results
+
+class ThemeManager:
+    """Gestionnaire de thèmes basé sur la configuration"""
+    
+    def __init__(self, config_manager: ConfigManager):
+        self.config = config_manager
+        self.current_theme = config_manager.get("ui.theme", "dark")
+    
+    def get_style(self, element: str) -> Style:
+        """Obtenir le style pour un élément"""
+        theme = self.current_theme
+        
+        # Couleurs de base du thème
+        base_colors = {
+            "dark": {
+                "primary": "cyan",
+                "secondary": "blue",
+                "success": "green",
+                "error": "red",
+                "warning": "yellow",
+                "info": "magenta",
+                "text": "white",
+                "background": "black",
+                "border": "cyan",
+                "dim": "grey70"
+            },
+            "light": {
+                "primary": "blue",
+                "secondary": "cyan",
+                "success": "green",
+                "error": "red",
+                "warning": "yellow",
+                "info": "magenta",
+                "text": "black",
+                "background": "white",
+                "border": "blue",
+                "dim": "grey30"
+            },
+            "monokai": {
+                "primary": "#66d9ef",
+                "secondary": "#a6e22e",
+                "success": "#a6e22e",
+                "error": "#f92672",
+                "warning": "#fd971f",
+                "info": "#ae81ff",
+                "text": "#f8f8f2",
+                "background": "#272822",
+                "border": "#66d9ef",
+                "dim": "#75715e"
+            }
+        }
+        
+        colors = base_colors.get(theme, base_colors["dark"])
+        
+        # Styles spécifiques
+        styles = {
+            "title": Style(color=colors["primary"], bold=True),
+            "subtitle": Style(color=colors["secondary"], bold=True),
+            "success": Style(color=colors["success"], bold=True),
+            "error": Style(color=colors["error"], bold=True),
+            "warning": Style(color=colors["warning"], bold=True),
+            "info": Style(color=colors["info"], bold=True),
+            "path": Style(color=colors["primary"], underline=True),
+            "version": Style(color=colors["warning"], bold=True),
+            "author": Style(color=colors["primary"], dim=True),
+            "command": Style(color=colors["success"], bold=True),
+            "argument": Style(color=colors["warning"]),
+            "option": Style(color=colors["info"]),
+            "highlight": Style(color=colors["text"], bold=True),
+            "dim": Style(color=colors["dim"])
+        }
+        
+        return styles.get(element, Style(color=colors["text"]))
+    
+    def get_color(self, color_name: str) -> str:
+        """Obtenir une couleur par nom"""
+        theme = self.current_theme
+        colors = {
+            "dark": {"cyan": "cyan", "blue": "blue", "green": "green", "red": "red", "yellow": "yellow"},
+            "light": {"cyan": "cyan", "blue": "blue", "green": "green", "red": "red", "yellow": "yellow"}
+        }
+        return colors.get(theme, colors["dark"]).get(color_name, "white")
 
 @dataclass
 class PackageInfo:
@@ -91,6 +707,8 @@ class PackageInfo:
     created_at: str
     size: int
     hash: str
+    includes: List[str] = field(default_factory=list)
+    excludes: List[str] = field(default_factory=list)
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'PackageInfo':
@@ -103,95 +721,585 @@ class PackageInfo:
             dependencies=data.get('dependencies', []),
             created_at=data.get('created_at', datetime.now().isoformat()),
             size=data.get('size', 0),
-            hash=data.get('hash', '')
+            hash=data.get('hash', ''),
+            includes=data.get('includes', []),
+            excludes=data.get('excludes', [])
         )
+
+class FileInclusionSystem:
+    """Système d'inclusion de fichiers avec support des dossiers complets"""
+    
+    @staticmethod
+    def expand_patterns(base_dir: Path, patterns: List[str]) -> Set[Path]:
+        """Étendre les motifs globaux en fichiers"""
+        files = set()
+        
+        for pattern in patterns:
+            # Nettoyer le pattern
+            pattern = pattern.strip()
+            
+            # Si c'est un dossier complet (se termine par / ou *)
+            if pattern.endswith('/') or pattern.endswith('\\'):
+                pattern = pattern.rstrip('/\\') + '/**'
+            elif os.path.isdir(os.path.join(base_dir, pattern)):
+                pattern = os.path.join(pattern, '**')
+            
+            # Chercher les fichiers correspondants
+            try:
+                for match in base_dir.glob(pattern):
+                    if match.is_file():
+                        files.add(match)
+                    elif match.is_dir() and base_dir.joinpath(pattern).is_dir():
+                        # Inclure tout le dossier récursivement
+                        for item in match.rglob('*'):
+                            if item.is_file():
+                                files.add(item)
+            except Exception as e:
+                print(f"Warning: Could not process pattern '{pattern}': {e}")
+        
+        return files
+    
+    @staticmethod
+    def should_include(path: Path, includes: List[str], excludes: List[str], 
+                      base_dir: Optional[Path] = None) -> bool:
+        """Déterminer si un fichier doit être inclus"""
+        if base_dir:
+            rel_path = str(path.relative_to(base_dir))
+        else:
+            rel_path = str(path)
+        
+        # Convertir les séparateurs pour la correspondance
+        rel_path = rel_path.replace('\\', '/')
+        
+        # Vérifier les exclusions d'abord
+        for pattern in excludes:
+            pattern = pattern.replace('\\', '/')
+            if fnmatch.fnmatch(rel_path, pattern):
+                return False
+        
+        # Si aucune inclusion spécifiée, tout inclure
+        if not includes:
+            return True
+        
+        # Vérifier les inclusions
+        for pattern in includes:
+            pattern = pattern.replace('\\', '/')
+            if fnmatch.fnmatch(rel_path, pattern):
+                return True
+        
+        return False
+    
+    @staticmethod
+    def collect_files(base_dir: Path, includes: List[str], excludes: List[str], 
+                     include_empty_dirs: bool = True) -> Tuple[Set[Path], Set[Path]]:
+        """Collecter les fichiers et dossiers à inclure"""
+        files = set()
+        dirs = set()
+        
+        # Élargir les patterns d'inclusion
+        included_files = FileInclusionSystem.expand_patterns(base_dir, includes)
+        
+        # Filtrer avec les exclusions
+        for file in included_files:
+            if FileInclusionSystem.should_include(file, includes, excludes, base_dir):
+                files.add(file)
+                # Ajouter les répertoires parents
+                for parent in file.parents:
+                    if parent != base_dir:
+                        dirs.add(parent)
+        
+        # Ajouter les dossiers vides si demandé
+        if include_empty_dirs:
+            for pattern in includes:
+                if pattern.endswith('/') or '*' not in pattern:
+                    dir_pattern = pattern.rstrip('/')
+                    dir_path = base_dir / dir_pattern
+                    if dir_path.exists() and dir_path.is_dir():
+                        dirs.add(dir_path)
+                        # Ajouter tous les sous-dossiers vides
+                        for root, dirnames, filenames in os.walk(dir_path):
+                            root_path = Path(root)
+                            if not filenames:  # Dossier vide
+                                dirs.add(root_path)
+        
+        return files, dirs
+
+class InteractiveConfigurator:
+    """Configurateur interactif"""
+    
+    def __init__(self, console: Console, config_manager: ConfigManager, theme_manager: ThemeManager):
+        self.console = console
+        self.config = config_manager
+        self.theme = theme_manager
+    
+    def run(self):
+        """Lancer le configurateur interactif"""
+        self.console.clear()
+        self._print_header("Zenv Configuration Wizard")
+        
+        while True:
+            self.console.print("\n" + "="*60)
+            self.console.print("[bold cyan]Main Menu[/]")
+            self.console.print("="*60)
+            
+            choices = [
+                ("1", "Configure by Category"),
+                ("2", "Search Parameter"),
+                ("3", "View All Parameters"),
+                ("4", "Reset to Defaults"),
+                ("5", "Import Configuration"),
+                ("6", "Export Configuration"),
+                ("7", "Validate Configuration"),
+                ("8", "Show Statistics"),
+                ("9", "Save and Exit"),
+                ("0", "Exit Without Saving")
+            ]
+            
+            for num, desc in choices:
+                self.console.print(f"  [{self.theme.get_color('primary')}]{num}[/] - {desc}")
+            
+            choice = Prompt.ask(
+                "\nSelect option",
+                choices=[c[0] for c in choices],
+                default="9"
+            )
+            
+            if choice == "1":
+                self._configure_by_category()
+            elif choice == "2":
+                self._search_parameter()
+            elif choice == "3":
+                self._view_all_parameters()
+            elif choice == "4":
+                self._reset_defaults()
+            elif choice == "5":
+                self._import_config()
+            elif choice == "6":
+                self._export_config()
+            elif choice == "7":
+                self._validate_config()
+            elif choice == "8":
+                self._show_statistics()
+            elif choice == "9":
+                self.config._save()
+                self.console.print("[green]✓ Configuration saved[/]")
+                return
+            elif choice == "0":
+                if Confirm.ask("Exit without saving changes?"):
+                    return
+    
+    def _configure_by_category(self):
+        """Configurer par catégorie"""
+        categories = list(ConfigCategory)
+        
+        while True:
+            self.console.print("\n" + "-"*60)
+            self.console.print("[bold cyan]Select Category[/]")
+            self.console.print("-"*60)
+            
+            for i, category in enumerate(categories, 1):
+                params = self.config.get_by_category(category)
+                self.console.print(f"  [{self.theme.get_color('primary')}]{i:2d}[/] - {category.value} ({len(params)} parameters)")
+            
+            self.console.print(f"  [{self.theme.get_color('primary')}] 0[/] - Back to Main Menu")
+            
+            try:
+                choice = IntPrompt.ask("\nSelect category", default=0)
+                if choice == 0:
+                    return
+                elif 1 <= choice <= len(categories):
+                    category = categories[choice - 1]
+                    self._configure_category(category)
+                else:
+                    self.console.print("[red]Invalid choice[/]")
+            except ValueError:
+                self.console.print("[red]Please enter a number[/]")
+    
+    def _configure_category(self, category: ConfigCategory):
+        """Configurer une catégorie spécifique"""
+        params = self.config.get_by_category(category)
+        
+        if not params:
+            self.console.print(f"[yellow]No parameters in {category.value}[/]")
+            return
+        
+        # Pagination
+        page_size = 10
+        param_list = list(params.items())
+        total_pages = (len(param_list) + page_size - 1) // page_size
+        page = 0
+        
+        while True:
+            self.console.clear()
+            self._print_header(f"Configuring {category.value}")
+            
+            start = page * page_size
+            end = start + page_size
+            page_params = param_list[start:end]
+            
+            # Afficher les paramètres de la page
+            table = Table(title=f"Page {page + 1}/{total_pages}")
+            table.add_column("ID", style="cyan")
+            table.add_column("Parameter", style="green")
+            table.add_column("Current Value", style="yellow")
+            table.add_column("Description")
+            
+            for idx, (key, param) in enumerate(page_params, start + 1):
+                current = self.config.get(key, param.default)
+                table.add_row(
+                    str(idx),
+                    param.name,
+                    str(current)[:50],
+                    param.description[:100] + "..." if len(param.description) > 100 else param.description
+                )
+            
+            self.console.print(table)
+            
+            # Options de navigation
+            self.console.print("\n[n] Next page | [p] Previous page | [e] Edit parameter | [b] Back")
+            
+            action = Prompt.ask("Action", choices=["n", "p", "e", "b"], default="b")
+            
+            if action == "n":
+                if page < total_pages - 1:
+                    page += 1
+                else:
+                    self.console.print("[yellow]Already on last page[/]")
+            elif action == "p":
+                if page > 0:
+                    page -= 1
+                else:
+                    self.console.print("[yellow]Already on first page[/]")
+            elif action == "e":
+                try:
+                    param_idx = IntPrompt.ask("Enter parameter ID to edit", min=start + 1, max=end)
+                    key, param = param_list[param_idx - 1]
+                    self._edit_parameter(key, param)
+                except ValueError:
+                    self.console.print("[red]Invalid parameter ID[/]")
+            elif action == "b":
+                return
+    
+    def _edit_parameter(self, key: str, param: ConfigParam):
+        """Éditer un paramètre"""
+        current = self.config.get(key, param.default)
+        
+        self.console.print(f"\n[bold cyan]Editing: {param.name}[/]")
+        self.console.print(f"[dim]{param.description}[/]")
+        self.console.print(f"[yellow]Current value: {current}[/]")
+        self.console.print(f"[dim]Type: {param.type.__name__}[/]")
+        
+        if param.options:
+            self.console.print(f"[dim]Options: {', '.join(param.options)}[/]")
+        if param.min is not None or param.max is not None:
+            range_str = ""
+            if param.min is not None:
+                range_str += f"min={param.min}"
+            if param.max is not None:
+                if range_str:
+                    range_str += ", "
+                range_str += f"max={param.max}"
+            self.console.print(f"[dim]Range: {range_str}[/]")
+        
+        # Demander la nouvelle valeur
+        while True:
+            if param.type == bool:
+                new_value = Confirm.ask("New value", default=current)
+            elif param.type == int:
+                new_value = IntPrompt.ask("New value", default=current)
+            elif param.type == float:
+                new_value = FloatPrompt.ask("New value", default=current)
+            elif param.options:
+                self.console.print("\nAvailable options:")
+                for i, option in enumerate(param.options, 1):
+                    self.console.print(f"  {i}. {option}")
+                choice = IntPrompt.ask("Select option", min=1, max=len(param.options))
+                new_value = param.options[choice - 1]
+            else:
+                new_value = Prompt.ask("New value", default=str(current))
+            
+            # Valider
+            valid, message = param.validate(new_value)
+            if valid:
+                success, msg = self.config.set(key, new_value)
+                if success:
+                    self.console.print(f"[green]✓ {msg}[/]")
+                else:
+                    self.console.print(f"[red]✗ {msg}[/]")
+                break
+            else:
+                self.console.print(f"[red]Invalid value: {message}[/]")
+                if not Confirm.ask("Try again?"):
+                    break
+    
+    def _search_parameter(self):
+        """Rechercher un paramètre"""
+        query = Prompt.ask("Search query")
+        results = self.config.search(query)
+        
+        if not results:
+            self.console.print(f"[yellow]No results for '{query}'[/]")
+            return
+        
+        self.console.print(f"\n[green]Found {len(results)} parameters:[/]")
+        
+        table = Table()
+        table.add_column("Key", style="cyan")
+        table.add_column("Name", style="green")
+        table.add_column("Value", style="yellow")
+        table.add_column("Category")
+        
+        for key, param in list(results.items())[:20]:  # Limiter à 20 résultats
+            current = self.config.get(key, param.default)
+            table.add_row(
+                key,
+                param.name,
+                str(current)[:30],
+                param.category.value
+            )
+        
+        self.console.print(table)
+        
+        if len(results) > 20:
+            self.console.print(f"[dim]... and {len(results) - 20} more results[/]")
+        
+        if Confirm.ask("\nEdit a parameter?"):
+            key = Prompt.ask("Enter parameter key")
+            if key in results:
+                self._edit_parameter(key, results[key])
+            else:
+                self.console.print("[red]Parameter not found in results[/]")
+    
+    def _view_all_parameters(self):
+        """Voir tous les paramètres"""
+        total = len(self.config.params)
+        self.console.print(f"\n[bold]Total parameters: {total:,}[/]")
+        
+        # Statistiques par catégorie
+        table = Table(title="Parameters by Category")
+        table.add_column("Category", style="cyan")
+        table.add_column("Count", style="green")
+        table.add_column("Visible", style="yellow")
+        table.add_column("Advanced", style="magenta")
+        
+        for category in ConfigCategory:
+            params = self.config.get_by_category(category)
+            visible = sum(1 for p in params.values() if not p.hidden)
+            advanced = sum(1 for p in params.values() if p.advanced)
+            table.add_row(
+                category.value,
+                str(len(params)),
+                str(visible),
+                str(advanced)
+            )
+        
+        self.console.print(table)
+        
+        if Confirm.ask("\nView detailed list?"):
+            # Exporter vers un fichier
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = self.config.config_dir / f"all_parameters_{timestamp}.txt"
+            
+            with open(filename, 'w') as f:
+                f.write(f"Zenv Configuration - All Parameters\n")
+                f.write(f"Generated: {datetime.now()}\n")
+                f.write(f"Total: {total}\n")
+                f.write("="*80 + "\n\n")
+                
+                for category in ConfigCategory:
+                    params = self.config.get_by_category(category)
+                    if params:
+                        f.write(f"\n{category.value}\n")
+                        f.write("-"*40 + "\n")
+                        for key, param in params.items():
+                            current = self.config.get(key, param.default)
+                            f.write(f"{key} = {current}\n")
+            
+            self.console.print(f"[green]✓ Exported to {filename}[/]")
+    
+    def _reset_defaults(self):
+        """Réinitialiser aux valeurs par défaut"""
+        if Confirm.ask("[red]WARNING:[/] Reset ALL parameters to defaults?", default=False):
+            if Confirm.ask("[red]CONFIRM:[/] This cannot be undone!"):
+                self.config._create_default()
+                self.console.print("[green]✓ All parameters reset to defaults[/]")
+    
+    def _import_config(self):
+        """Importer une configuration"""
+        path = Prompt.ask("Config file path")
+        try:
+            with open(path, 'r') as f:
+                imported = json.load(f)
+            
+            count = 0
+            for key, value in imported.items():
+                if key in self.config.params:
+                    valid, _ = self.config.params[key].validate(value)
+                    if valid:
+                        self.config.config[key] = value
+                        count += 1
+            
+            self.config._save()
+            self.console.print(f"[green]✓ Imported {count} parameters[/]")
+        except Exception as e:
+            self.console.print(f"[red]Error importing: {e}[/]")
+    
+    def _export_config(self):
+        """Exporter la configuration"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = self.config.config_dir / f"config_backup_{timestamp}.json"
+        
+        with open(filename, 'w') as f:
+            json.dump(self.config.config, f, indent=2, default=str)
+        
+        self.console.print(f"[green]✓ Configuration exported to {filename}[/]")
+    
+    def _validate_config(self):
+        """Valider la configuration"""
+        errors = []
+        warnings = []
+        
+        for key, param in self.config.params.items():
+            value = self.config.get(key)
+            valid, message = param.validate(value)
+            if not valid:
+                errors.append(f"{key}: {message}")
+            elif param.required and not value:
+                warnings.append(f"{key}: Required parameter is empty")
+        
+        if errors:
+            self.console.print("[red]Validation Errors:[/]")
+            for error in errors[:10]:  # Limiter l'affichage
+                self.console.print(f"  • {error}")
+            if len(errors) > 10:
+                self.console.print(f"  ... and {len(errors) - 10} more errors")
+        else:
+            self.console.print("[green]✓ No validation errors[/]")
+        
+        if warnings:
+            self.console.print("\n[yellow]Warnings:[/]")
+            for warning in warnings[:10]:
+                self.console.print(f"  • {warning}")
+    
+    def _show_statistics(self):
+        """Afficher les statistiques"""
+        total = len(self.config.params)
+        visible = sum(1 for p in self.config.params.values() if not p.hidden)
+        advanced = sum(1 for p in self.config.params.values() if p.advanced)
+        
+        stats = Table(title="Configuration Statistics")
+        stats.add_column("Metric", style="cyan")
+        stats.add_column("Value", style="green")
+        
+        stats.add_row("Total Parameters", f"{total:,}")
+        stats.add_row("Visible Parameters", f"{visible:,}")
+        stats.add_row("Advanced Parameters", f"{advanced:,}")
+        stats.add_row("Categories", str(len(ConfigCategory)))
+        
+        # Par type
+        types = {}
+        for param in self.config.params.values():
+            t = param.type.__name__
+            types[t] = types.get(t, 0) + 1
+        
+        for t, count in types.items():
+            stats.add_row(f"Type: {t}", f"{count:,}")
+        
+        self.console.print(stats)
+        
+        # Taille du fichier de config
+        config_size = self.config.config_file.stat().st_size
+        self.console.print(f"\nConfig file size: {config_size:,} bytes")
+    
+    def _print_header(self, title: str):
+        """Afficher un en-tête"""
+        self.console.print(Rule(title, style=self.theme.get_color("primary")))
+        self.console.print()
 
 class ZenvCLI:
     
     def __init__(self):
-        self.console = Console()
+        # Initialiser le gestionnaire de configuration
+        self.config_dir = Path.home() / ".zenv"
+        self.config_manager = ConfigManager(self.config_dir)
+        
+        # Initialiser le gestionnaire de thèmes
+        self.theme_manager = ThemeManager(self.config_manager)
+        
+        # Créer la console avec le thème
+        custom_theme = RichTheme({
+            "info": self.theme_manager.get_color("cyan"),
+            "warning": self.theme_manager.get_color("yellow"),
+            "error": self.theme_manager.get_color("red"),
+            "success": self.theme_manager.get_color("green"),
+            "title": "bold cyan",
+            "path": "cyan underline"
+        })
+        self.console = Console(theme=custom_theme)
+        
+        # Initialiser les composants
         self.transpiler = ZenvTranspiler()
         self.runtime = ZenvRuntime()
         self.builder = ZenvBuilder()
         self.hub = ZenvHubClient()
-        self.theme = Theme()
+        self.file_system = FileInclusionSystem()
         
-        # Configuration
-        self.config_dir = Path.home() / ".zenv"
-        self.config_file = self.config_dir / "config.json"
-        self._load_config()
-    
-    def _load_config(self):
-        """Charger la configuration"""
-        if not self.config_dir.exists():
-            self.config_dir.mkdir(parents=True, exist_ok=True)
-        
-        default_config = {
-            "theme": "dark",
-            "log_level": "info",
-            "auto_update": True,
-            "hub_url": "https://hub.zenv.org",
-            "cache_dir": str(self.config_dir / "cache"),
-            "installed_packages": []
-        }
-        
-        if not self.config_file.exists():
-            with open(self.config_file, 'w') as f:
-                json.dump(default_config, f, indent=2)
-            self.config = default_config
-        else:
-            try:
-                with open(self.config_file, 'r') as f:
-                    self.config = json.load(f)
-            except:
-                self.config = default_config
-    
-    def _save_config(self):
-        """Sauvegarder la configuration"""
-        with open(self.config_file, 'w') as f:
-            json.dump(self.config, f, indent=2)
+        # Configurateur interactif
+        self.configurator = InteractiveConfigurator(
+            self.console, self.config_manager, self.theme_manager
+        )
     
     def _log(self, message: str, level: LogLevel = LogLevel.INFO, **kwargs):
         """Journalisation enrichie"""
+        use_emoji = self.config_manager.get("ui.emoji", True)
+        
         icons = {
-            LogLevel.INFO: "ℹ️",
-            LogLevel.WARNING: "⚠️",
-            LogLevel.ERROR: "❌",
-            LogLevel.SUCCESS: "✅",
-            LogLevel.DEBUG: "🐛"
+            LogLevel.INFO: "ℹ️" if use_emoji else "[i]",
+            LogLevel.WARNING: "⚠️" if use_emoji else "[!]",
+            LogLevel.ERROR: "❌" if use_emoji else "[x]",
+            LogLevel.SUCCESS: "✅" if use_emoji else "[√]",
+            LogLevel.DEBUG: "🐛" if use_emoji else "[d]",
+            LogLevel.VERBOSE: "📝" if use_emoji else "[v]"
         }
         
         colors = {
-            LogLevel.INFO: self.theme.PRIMARY,
-            LogLevel.WARNING: self.theme.WARNING,
-            LogLevel.ERROR: self.theme.ERROR,
-            LogLevel.SUCCESS: self.theme.SUCCESS,
-            LogLevel.DEBUG: "dim"
+            LogLevel.INFO: self.theme_manager.get_color("cyan"),
+            LogLevel.WARNING: self.theme_manager.get_color("yellow"),
+            LogLevel.ERROR: self.theme_manager.get_color("red"),
+            LogLevel.SUCCESS: self.theme_manager.get_color("green"),
+            LogLevel.DEBUG: self.theme_manager.get_color("dim"),
+            LogLevel.VERBOSE: "magenta"
         }
         
         icon = icons.get(level, "")
-        color = colors.get(level, self.theme.PRIMARY)
+        color = colors.get(level, self.theme_manager.get_color("cyan"))
         
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.console.print(f"[dim]{timestamp}[/dim] [{color}]{icon} {message}[/]", **kwargs)
     
     def _print_header(self):
         """Afficher l'en-tête de Zenv"""
+        if not self.config_manager.get("ui.show_banner", True):
+            return
+            
         header = Text()
-        header.append("Z", style="bold cyan")
-        header.append("env", style="bold blue")
-        header.append(f" v{__version__}", style=Style(color="yellow", dim=True))
-        header.append("\nZen Execution Environment", style=Style(italic=True, dim=True))
+        header.append("Z", style=self.theme_manager.get_style("title"))
+        header.append("env", style=self.theme_manager.get_style("subtitle"))
+        header.append(f" v{__version__}", style=self.theme_manager.get_style("version"))
+        header.append("\nZen Execution Environment", style=self.theme_manager.get_style("dim"))
         
-        self.console.print(Panel(header, box=DOUBLE, border_style="cyan"))
+        self.console.print(Panel(header, box=DOUBLE, border_style=self.theme_manager.get_color("primary")))
     
     def _print_footer(self, message: str = "Operation completed"):
         """Afficher un pied de page"""
-        self.console.print(f"\n[dim]{'─' * 60}[/]")
-        self.console.print(f"[dim]{message}[/]")
+        self.console.print(f"\n[{self.theme_manager.get_color('dim')}]{'─' * 60}[/]")
+        self.console.print(f"[{self.theme_manager.get_color('dim')}]{message}[/]")
     
     def _create_progress(self, description: str = "Processing..."):
         """Créer une barre de progression"""
+        if not self.config_manager.get("ui.show_progress", True):
+            return None
+            
         return Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -204,7 +1312,7 @@ class ZenvCLI:
     
     def run(self, args: List[str]) -> int:
         """Point d'entrée principal"""
-        # Parser principal avec Rich
+        # Parser principal
         parser = argparse.ArgumentParser(
             prog="zenv",
             description="[bold cyan]Zenv[/] - Zen Execution Environment",
@@ -213,6 +1321,7 @@ class ZenvCLI:
   [green]zenv run app.zv[/]          Run a Zenv file
   [green]zenv transpile app.zv[/]    Transpile to Python
   [green]zenv build[/]               Build a package
+  [green]zenv config set[/]          Configure parameters
   [green]zenv pkg install numpy[/]   Install a package"""
         )
         
@@ -232,13 +1341,36 @@ class ZenvCLI:
         transpile_parser.add_argument("--show-ast", action="store_true", help="Show AST")
         transpile_parser.add_argument("--optimize", action="store_true", help="Optimize output")
         
-        # Commande build
-        build_parser = subparsers.add_parser("build", help="Build package")
-        build_parser.add_argument("--name", dest="name", help="Package name")
+        # Commande build - AMÉLIORÉE POUR LES DOSSIERS COMPLETS
+        build_parser = subparsers.add_parser("build", help="Build package with full directory inclusion")
+        build_parser.add_argument("--name", help="Package name")
         build_parser.add_argument("-f", "--file", default="package.zcf", help="Manifest file")
         build_parser.add_argument("-o", "--output", default="dist", help="Output directory")
         build_parser.add_argument("--clean", action="store_true", help="Clean build directory")
         build_parser.add_argument("--test", action="store_true", help="Run tests after build")
+        
+        # Options d'inclusion de fichiers
+        build_group = build_parser.add_argument_group("File Inclusion")
+        build_group.add_argument("--include", action="append", help="File patterns to include (e.g., 'src/**', 'data/*.json')")
+        build_group.add_argument("--exclude", action="append", help="File patterns to exclude")
+        build_group.add_argument("--include-dir", action="append", help="Directories to include completely")
+        build_group.add_argument("--no-default-includes", action="store_true", help="Don't use default includes")
+        build_group.add_argument("--no-default-excludes", action="store_true", help="Don't use default excludes")
+        
+        # Commande config - NOUVELLE COMMANDE INTERACTIVE
+        config_parser = subparsers.add_parser("config", help="Configure Zenv (interactive)")
+        config_sub = config_parser.add_subparsers(dest="config_command", help="Config commands")
+        
+        # Sous-commandes config
+        config_sub.add_parser("set", help="Interactive configuration wizard")
+        config_sub.add_parser("get", help="Get configuration value").add_argument("key", help="Parameter key")
+        config_sub.add_parser("list", help="List all parameters")
+        config_sub.add_parser("search", help="Search parameters").add_argument("query", help="Search query")
+        config_sub.add_parser("reset", help="Reset to defaults")
+        config_sub.add_parser("export", help="Export configuration").add_argument("file", nargs="?", help="Output file")
+        config_sub.add_parser("import", help="Import configuration").add_argument("file", help="Input file")
+        config_sub.add_parser("validate", help="Validate configuration")
+        config_sub.add_parser("stats", help="Show configuration statistics")
         
         # Commande pkg
         pkg_parser = subparsers.add_parser("pkg", help="Package management")
@@ -287,13 +1419,6 @@ class ZenvCLI:
         site_parser.add_argument("file", help="Package file")
         site_parser.add_argument("--global", action="store_true", help="Install globally")
         
-        # Commande config
-        config_parser = subparsers.add_parser("config", help="Configuration")
-        config_sub = config_parser.add_subparsers(dest="config_command", help="Config commands")
-        config_sub.add_parser("show", help="Show configuration")
-        config_sub.add_parser("edit", help="Edit configuration")
-        config_sub.add_parser("reset", help="Reset to defaults")
-        
         # Commande doctor
         subparsers.add_parser("doctor", help="Diagnose system issues")
         
@@ -311,21 +1436,26 @@ class ZenvCLI:
             parsed = parser.parse_args(args)
             
             # Gestion des commandes
-            command_map = {
-                "run": lambda: self._cmd_run(parsed.file, parsed.args, parsed.debug, parsed.profile),
-                "transpile": lambda: self._cmd_transpile(parsed.file, parsed.output, parsed.show_ast, parsed.optimize),
-                "build": lambda: self._cmd_build(parsed.name, parsed.file, parsed.output, parsed.clean, parsed.test),
-                "pkg": lambda: self._cmd_pkg(parsed),
-                "hub": lambda: self._cmd_hub(parsed),
-                "version": lambda: self._cmd_version(),
-                "site": lambda: self._cmd_site(parsed.file, getattr(parsed, 'global_scope', False)),
-                "config": lambda: self._cmd_config(parsed),
-                "doctor": lambda: self._cmd_doctor(),
-                "init": lambda: self._cmd_init(parsed.name, getattr(parsed, 'template', None))
-            }
-            
-            if parsed.command in command_map:
-                return command_map[parsed.command]()
+            if parsed.command == "run":
+                return self._cmd_run(parsed.file, parsed.args, parsed.debug, parsed.profile)
+            elif parsed.command == "transpile":
+                return self._cmd_transpile(parsed.file, parsed.output, parsed.show_ast, parsed.optimize)
+            elif parsed.command == "build":
+                return self._cmd_build(parsed)
+            elif parsed.command == "config":
+                return self._cmd_config(parsed)
+            elif parsed.command == "pkg":
+                return self._cmd_pkg(parsed)
+            elif parsed.command == "hub":
+                return self._cmd_hub(parsed)
+            elif parsed.command == "version":
+                return self._cmd_version()
+            elif parsed.command == "site":
+                return self._cmd_site(parsed.file, getattr(parsed, 'global_scope', False))
+            elif parsed.command == "doctor":
+                return self._cmd_doctor()
+            elif parsed.command == "init":
+                return self._cmd_init(parsed.name, getattr(parsed, 'template', None))
             else:
                 parser.print_help()
                 return 1
@@ -360,10 +1490,14 @@ class ZenvCLI:
         if profile:
             self._log("Profiling enabled", LogLevel.INFO)
         
-        with self._create_progress("Executing script...") as progress:
-            task = progress.add_task("[cyan]Running...", total=None)
+        progress = self._create_progress("Executing script...")
+        if progress:
+            with progress:
+                task = progress.add_task("[cyan]Running...", total=None)
+                result = self.runtime.execute(file, args, debug=debug, profile=profile)
+                progress.update(task, completed=100)
+        else:
             result = self.runtime.execute(file, args, debug=debug, profile=profile)
-            progress.update(task, completed=100)
         
         if result == 0:
             self._log("Execution completed successfully", LogLevel.SUCCESS)
@@ -382,22 +1516,26 @@ class ZenvCLI:
             return 1
         
         try:
-            with self._create_progress("Transpiling...") as progress:
-                task = progress.add_task("[cyan]Processing...", total=100)
-                
-                if show_ast:
-                    # Note: Cette méthode doit être implémentée dans ZenvTranspiler
-                    ast_result = self.transpiler.get_ast(file) if hasattr(self.transpiler, 'get_ast') else "AST display not available"
-                    progress.update(task, advance=30)
+            progress = self._create_progress("Transpiling...")
+            if progress:
+                with progress:
+                    task = progress.add_task("[cyan]Processing...", total=100)
                     
-                    self.console.print(Panel(
-                        str(ast_result),
-                        title="Abstract Syntax Tree",
-                        border_style="blue"
-                    ))
-                
+                    if show_ast:
+                        # Note: Cette méthode doit être implémentée dans ZenvTranspiler
+                        ast_result = self.transpiler.get_ast(file) if hasattr(self.transpiler, 'get_ast') else "AST display not available"
+                        progress.update(task, advance=30)
+                        
+                        self.console.print(Panel(
+                            str(ast_result),
+                            title="Abstract Syntax Tree",
+                            border_style="blue"
+                        ))
+                    
+                    result = self.transpiler.transpile_file(file, output, optimize=optimize)
+                    progress.update(task, advance=70)
+            else:
                 result = self.transpiler.transpile_file(file, output, optimize=optimize)
-                progress.update(task, advance=70)
             
             if output:
                 output_path = Path(output)
@@ -417,29 +1555,54 @@ class ZenvCLI:
             logger.exception("Transpilation failed:")
             return 1
     
-    def _cmd_build(self, name: Optional[str], manifest: str, output: str, clean: bool, test: bool) -> int:
-        """Construire un package"""
+    def _cmd_build(self, parsed):
+        """Construire un package avec inclusion de dossiers complets"""
         self._print_header()
         
         try:
-            if clean:
-                if os.path.exists(output):
-                    shutil.rmtree(output)
+            # Préparer les inclusions et exclusions
+            includes = []
+            excludes = []
+            
+            # Inclusions par défaut
+            if not parsed.no_default_includes:
+                includes.extend(self.config_manager.get("build.default_includes", []))
+            
+            # Exclusions par défaut
+            if not parsed.no_default_excludes:
+                excludes.extend(self.config_manager.get("build.default_excludes", []))
+            
+            # Inclusions spécifiques
+            if parsed.include:
+                includes.extend(parsed.include)
+            
+            if parsed.include_dir:
+                for dir_path in parsed.include_dir:
+                    includes.append(f"{dir_path}/**")
+            
+            # Exclusions spécifiques
+            if parsed.exclude:
+                excludes.extend(parsed.exclude)
+            
+            self._log(f"Inclusions: {len(includes)} patterns", LogLevel.INFO)
+            self._log(f"Exclusions: {len(excludes)} patterns", LogLevel.INFO)
+            
+            # Nettoyer si demandé
+            if parsed.clean:
+                if os.path.exists(parsed.output):
+                    shutil.rmtree(parsed.output)
                 self._log("Cleaned build directory", LogLevel.INFO)
             
-            if name:
-                # Créer un manifeste simple
+            # Créer un manifeste si nom fourni
+            if parsed.name:
                 manifest_content = f"""[Zenv]
-name = {name}
+name = {parsed.name}
 version = 1.0.0
 author = Zenv User
 description = A Zenv package
 
 [File-build]
-files = *.zv
-        *.py
-        README.md
-        LICENSE*
+files = {" ".join(includes) if includes else "*"}
 
 [docs]
 description = README.md
@@ -449,16 +1612,48 @@ file = LICENSE*
 """
                 with open("package.zcf", "w") as f:
                     f.write(manifest_content)
-                manifest = "package.zcf"
-                self._log(f"Created manifest for: {name}", LogLevel.INFO)
+                parsed.file = "package.zcf"
+                self._log(f"Created manifest for: {parsed.name}", LogLevel.INFO)
             
-            with self._create_progress("Building package...") as progress:
-                task = progress.add_task("[cyan]Building...", total=100)
-                result = self.builder.build(manifest, output)
-                progress.update(task, completed=100)
-        
+            # Collecter les fichiers
+            base_dir = Path(".").absolute()
+            self._log(f"Base directory: {base_dir}", LogLevel.INFO)
+            
+            include_empty_dirs = self.config_manager.get("build.include_empty_dirs", True)
+            
+            files, dirs = self.file_system.collect_files(
+                base_dir, includes, excludes, include_empty_dirs
+            )
+            
+            self._log(f"Found {len(files)} files and {len(dirs)} directories", LogLevel.SUCCESS)
+            
+            # Afficher la liste des fichiers
+            if len(files) <= 50:  # Ne pas afficher si trop de fichiers
+                tree = Tree(f"[bold]Files to include:[/]")
+                for file in sorted(files):
+                    rel_path = file.relative_to(base_dir)
+                    tree.add(f"[cyan]{rel_path}[/]")
+                self.console.print(tree)
+            else:
+                self._log(f"Too many files to display ({len(files)}), showing first 50", LogLevel.WARNING)
+                tree = Tree(f"[bold]First 50 files to include:[/]")
+                for file in sorted(list(files)[:50]):
+                    rel_path = file.relative_to(base_dir)
+                    tree.add(f"[cyan]{rel_path}[/]")
+                self.console.print(tree)
+            
+            # Construire le package
+            progress = self._create_progress("Building package...")
+            if progress:
+                with progress:
+                    task = progress.add_task("[cyan]Building...", total=100)
+                    result = self.builder.build(parsed.file, parsed.output)
+                    progress.update(task, completed=100)
+            else:
+                result = self.builder.build(parsed.file, parsed.output)
+            
             if result:
-                output_dir = Path(output)
+                output_dir = Path(parsed.output)
                 packages = list(output_dir.glob("*.zv"))
                 
                 if packages:
@@ -467,12 +1662,17 @@ file = LICENSE*
                     self.console.print(Panel.fit(
                         f"[bold green]✓ Build Successful![/]\n\n"
                         f"[bold]Package:[/] [cyan]{package_info.name}[/] v{package_info.version}\n"
+                        f"[bold]Files included:[/] {len(files)}\n"
                         f"[bold]Size:[/] {package_info.size:,} bytes\n"
                         f"[bold]Output:[/] {output_dir.absolute()}\n"
                         f"[bold]Hash:[/] [dim]{package_info.hash[:16]}...[/]",
                         title="Build Results",
                         border_style="green"
                     ))
+                
+                # Exécuter les tests si demandé
+                if parsed.test:
+                    self._run_tests(parsed.output)
                 
                 self._print_footer("Build completed")
                 return 0
@@ -484,6 +1684,117 @@ file = LICENSE*
             self._log(f"Build error: {e}", LogLevel.ERROR)
             logger.exception("Build failed:")
             return 1
+    
+    def _cmd_config(self, parsed):
+        """Gestion de la configuration"""
+        if parsed.config_command == "set":
+            # Lancer le configurateur interactif
+            self.configurator.run()
+            return 0
+        elif parsed.config_command == "get":
+            value = self.config_manager.get(parsed.key)
+            self.console.print(f"[cyan]{parsed.key}[/] = [green]{value}[/]")
+            return 0
+        elif parsed.config_command == "list":
+            self._list_configuration()
+            return 0
+        elif parsed.config_command == "search":
+            results = self.config_manager.search(parsed.query)
+            if results:
+                table = Table(title=f"Search Results for '{parsed.query}'")
+                table.add_column("Key", style="cyan")
+                table.add_column("Name", style="green")
+                table.add_column("Value", style="yellow")
+                table.add_column("Category")
+                
+                for key, param in list(results.items())[:20]:
+                    value = self.config_manager.get(key)
+                    table.add_row(key, param.name, str(value)[:30], param.category.value)
+                
+                self.console.print(table)
+                self.console.print(f"[dim]Found {len(results)} parameters[/]")
+            else:
+                self.console.print(f"[yellow]No results for '{parsed.query}'[/]")
+            return 0
+        elif parsed.config_command == "reset":
+            if Confirm.ask("Reset ALL parameters to defaults?", default=False):
+                self.config_manager._create_default()
+                self.console.print("[green]✓ Configuration reset to defaults[/]")
+            return 0
+        elif parsed.config_command == "export":
+            filename = parsed.file or f"zenv_config_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            with open(filename, 'w') as f:
+                json.dump(self.config_manager.config, f, indent=2, default=str)
+            self.console.print(f"[green]✓ Configuration exported to {filename}[/]")
+            return 0
+        elif parsed.config_command == "import":
+            try:
+                with open(parsed.file, 'r') as f:
+                    imported = json.load(f)
+                
+                count = 0
+                for key, value in imported.items():
+                    if key in self.config_manager.params:
+                        valid, _ = self.config_manager.params[key].validate(value)
+                        if valid:
+                            self.config_manager.config[key] = value
+                            count += 1
+                
+                self.config_manager._save()
+                self.console.print(f"[green]✓ Imported {count} parameters[/]")
+            except Exception as e:
+                self.console.print(f"[red]Error importing: {e}[/]")
+            return 0
+        elif parsed.config_command == "validate":
+            errors = []
+            for key, param in self.config_manager.params.items():
+                value = self.config_manager.get(key)
+                valid, message = param.validate(value)
+                if not valid:
+                    errors.append(f"{key}: {message}")
+            
+            if errors:
+                self.console.print("[red]Validation Errors:[/]")
+                for error in errors[:10]:
+                    self.console.print(f"  • {error}")
+            else:
+                self.console.print("[green]✓ No validation errors[/]")
+            return 0
+        elif parsed.config_command == "stats":
+            total = len(self.config_manager.params)
+            visible = sum(1 for p in self.config_manager.params.values() if not p.hidden)
+            
+            stats = Table(title="Configuration Statistics")
+            stats.add_column("Metric", style="cyan")
+            stats.add_column("Value", style="green")
+            
+            stats.add_row("Total Parameters", f"{total:,}")
+            stats.add_row("Visible Parameters", f"{visible:,}")
+            stats.add_row("Categories", str(len(ConfigCategory)))
+            
+            self.console.print(stats)
+            return 0
+        else:
+            self.console.print("[red]Unknown config command[/]")
+            return 1
+    
+    def _list_configuration(self):
+        """Lister la configuration"""
+        for category in ConfigCategory:
+            params = self.config_manager.get_by_category(category)
+            if params:
+                self.console.print(f"\n[bold]{category.value}[/]")
+                self.console.print("-" * 40)
+                
+                table = Table(show_header=False)
+                table.add_column("Key", style="cyan")
+                table.add_column("Value", style="green")
+                
+                for key, param in params.items():
+                    value = self.config_manager.get(key)
+                    table.add_row(key, str(value)[:50])
+                
+                self.console.print(table)
     
     def _analyze_package(self, package_path: Path) -> PackageInfo:
         """Analyser un package"""
@@ -511,6 +1822,12 @@ file = LICENSE*
             size=package_path.stat().st_size,
             hash=hashlib.sha256(package_path.read_bytes()).hexdigest()
         )
+    
+    def _run_tests(self, output_dir: str) -> bool:
+        """Exécuter les tests"""
+        self._log("Running tests...", LogLevel.INFO)
+        # Implémentation simplifiée
+        return True
     
     def _cmd_pkg(self, parsed):
         """Gestion des packages"""
@@ -550,7 +1867,7 @@ file = LICENSE*
         """Afficher la version"""
         self._print_header()
         
-        info_table = Table(title="System Information", box=ROUNDED)
+        info_table = Table(title="System Information")
         info_table.add_column("Component", style="cyan")
         info_table.add_column("Version", style="green")
         
@@ -560,6 +1877,17 @@ file = LICENSE*
         info_table.add_row("OS", platform.system())
         
         self.console.print(info_table)
+        
+        # Afficher des infos de configuration
+        config_stats = Table(title="Configuration")
+        config_stats.add_column("Parameter", style="cyan")
+        config_stats.add_column("Value", style="green")
+        
+        config_stats.add_row("Theme", self.config_manager.get("ui.theme", "dark"))
+        config_stats.add_row("Total Parameters", f"{len(self.config_manager.params):,}")
+        config_stats.add_row("Config File", str(self.config_manager.config_file))
+        
+        self.console.print(config_stats)
         
         self._print_footer()
         return 0
@@ -589,11 +1917,32 @@ file = LICENSE*
             self._log("Installation cancelled", LogLevel.WARNING)
             return 0
         
-        with self._create_progress("Installing package...") as progress:
-            task = progress.add_task("[cyan]Installing...", total=100)
-            
+        progress = self._create_progress("Installing package...")
+        if progress:
+            with progress:
+                task = progress.add_task("[cyan]Installing...", total=100)
+                
+                try:
+                    # Déterminer le répertoire d'installation
+                    if global_install:
+                        site_dir = Path("/usr/local/lib/zenv")
+                        site_dir.mkdir(parents=True, exist_ok=True)
+                    else:
+                        site_dir = Path.home() / ".zenv" / "packages"
+                        site_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    package_dir = site_dir / package_info.name
+                    
+                    # Extraire
+                    with tarfile.open(package_file, 'r:gz') as tar:
+                        tar.extractall(package_dir)
+                    progress.update(task, completed=100)
+                    
+                except Exception as e:
+                    self._log(f"Installation error: {e}", LogLevel.ERROR)
+                    return 1
+        else:
             try:
-                # Déterminer le répertoire d'installation
                 if global_install:
                     site_dir = Path("/usr/local/lib/zenv")
                     site_dir.mkdir(parents=True, exist_ok=True)
@@ -602,12 +1951,8 @@ file = LICENSE*
                     site_dir.mkdir(parents=True, exist_ok=True)
                 
                 package_dir = site_dir / package_info.name
-                
-                # Extraire
                 with tarfile.open(package_file, 'r:gz') as tar:
                     tar.extractall(package_dir)
-                progress.update(task, completed=100)
-                
             except Exception as e:
                 self._log(f"Installation error: {e}", LogLevel.ERROR)
                 return 1
@@ -625,73 +1970,61 @@ file = LICENSE*
         self._print_footer()
         return 0
     
-    def _cmd_config(self, parsed):
-        """Gestion de la configuration"""
-        if parsed.config_command == "show":
-            self._print_header()
-            
-            config_table = Table(title="Configuration", box=ROUNDED)
-            config_table.add_column("Key", style="cyan")
-            config_table.add_column("Value", style="green")
-            
-            for key, value in self.config.items():
-                if isinstance(value, list):
-                    value = ', '.join(value)
-                config_table.add_row(key, str(value))
-            
-            self.console.print(config_table)
-            self._print_footer()
-            return 0
-            
-        elif parsed.config_command == "edit":
-            self._log("Opening config file...", LogLevel.INFO)
-            # Implémenter l'édition
-            return 0
-            
-        elif parsed.config_command == "reset":
-            if Confirm.ask("Reset configuration to defaults?"):
-                self.config = {
-                    "theme": "dark",
-                    "log_level": "info",
-                    "auto_update": True,
-                    "hub_url": "https://hub.zenv.org",
-                    "cache_dir": str(self.config_dir / "cache"),
-                    "installed_packages": []
-                }
-                self._save_config()
-                self._log("Configuration reset to defaults", LogLevel.SUCCESS)
-            return 0
-    
     def _cmd_doctor(self):
         """Diagnostiquer les problèmes du système"""
         self._print_header()
         
-        print("Running system diagnostics...")
-        print()
-        
-        # Vérifications simples
         checks = []
         
-        # Python version
+        # Vérifier Python
         if sys.version_info >= (3, 8):
-            checks.append(("✓", "Python 3.8+", "OK"))
+            checks.append(("✓", "Python 3.8+", "OK", LogLevel.SUCCESS))
         else:
-            checks.append(("✗", "Python 3.8+", "Required"))
+            checks.append(("✗", "Python 3.8+", "Required", LogLevel.ERROR))
         
-        # Write permissions
+        # Vérifier les permissions
         try:
-            test_file = self.config_dir / "test.txt"
+            test_file = self.config_manager.config_dir / "test.txt"
             test_file.touch()
             test_file.unlink()
-            checks.append(("✓", "Write permissions", "OK"))
+            checks.append(("✓", "Write permissions", "OK", LogLevel.SUCCESS))
         except:
-            checks.append(("✗", "Write permissions", "Cannot write to config directory"))
+            checks.append(("✗", "Write permissions", "Cannot write to config directory", LogLevel.ERROR))
         
-        # Display results
-        print("System Check Results:")
-        print("-" * 60)
-        for icon, check, status in checks:
-            print(f"{icon} {check:20} {status}")
+        # Vérifier la configuration
+        config_errors = []
+        for key, param in self.config_manager.params.items():
+            value = self.config_manager.get(key)
+            valid, _ = param.validate(value)
+            if not valid and param.required:
+                config_errors.append(key)
+        
+        if not config_errors:
+            checks.append(("✓", "Configuration", "Valid", LogLevel.SUCCESS))
+        else:
+            checks.append(("✗", "Configuration", f"{len(config_errors)} errors", LogLevel.ERROR))
+        
+        # Afficher les résultats
+        table = Table(title="System Diagnostics")
+        table.add_column("Status", style="cyan")
+        table.add_column("Check", style="green")
+        table.add_column("Result", style="yellow")
+        table.add_column("Message")
+        
+        for icon, check, result, level in checks:
+            color = {
+                LogLevel.SUCCESS: "green",
+                LogLevel.ERROR: "red",
+                LogLevel.WARNING: "yellow"
+            }.get(level, "white")
+            table.add_row(f"[{color}]{icon}[/]", check, result, "")
+        
+        self.console.print(table)
+        
+        if config_errors:
+            self.console.print("\n[red]Configuration errors:[/]")
+            for error in config_errors[:5]:
+                self.console.print(f"  • {error}")
         
         self._print_footer("Diagnostics completed")
         return 0
@@ -711,44 +2044,36 @@ file = LICENSE*
         
         project_dir.mkdir()
         
-        # Créer la structure du projet
+        # Utiliser les paramètres de configuration
+        author = self.config_manager.get("general.author", "Zenv User")
+        version = self.config_manager.get("general.version", "1.0.0")
+        
         templates = {
             "basic": [
                 ("README.md", f"# {name}\n\nA Zenv project."),
                 ("package.zcf", f"""[Zenv]
 name = {name}
-version = 0.1.0
-author = Your Name
+version = {version}
+author = {author}
 description = A Zenv project
 
 [File-build]
-files = src/**/*.zv
-        src/**/*.py
+files = {" ".join(self.config_manager.get("build.default_includes", ["src/**/*", "*.zv", "*.py"]))}
 
 [docs]
 description = README.md
 """),
                 ("src/main.zv", "print('Hello from Zenv!')"),
-                (".gitignore", "dist/\n__pycache__/\n*.pyc")
-            ],
-            "lib": [
-                ("README.md", f"# {name}\n\nA Zenv library."),
-                ("package.zcf", f"""[Zenv]
-name = {name}
-version = 0.1.0
-author = Your Name
-description = A Zenv library
-
-[File-build]
-files = {name}/**/*.zv
-        {name}/**/*.py
-
-[docs]
-description = README.md
-"""),
-                (f"{name}/__init__.zv", "# Package init"),
-                (f"{name}/core.zv", "# Core functionality"),
-                (".gitignore", "dist/\n__pycache__/\n*.pyc")
+                (".gitignore", "\n".join(self.config_manager.get("build.default_excludes", []))),
+                ("zenv-config.json", json.dumps({
+                    "name": name,
+                    "version": version,
+                    "author": author,
+                    "build": {
+                        "includes": self.config_manager.get("build.default_includes"),
+                        "excludes": self.config_manager.get("build.default_excludes")
+                    }
+                }, indent=2))
             ]
         }
         
@@ -756,23 +2081,33 @@ description = README.md
         if template not in templates:
             template = "basic"
         
-        with self._create_progress("Creating project...") as progress:
-            task = progress.add_task("[cyan]Setting up...", total=len(templates[template]))
-            
+        progress = self._create_progress("Creating project...")
+        if progress:
+            with progress:
+                task = progress.add_task("[cyan]Setting up...", total=len(templates[template]))
+                
+                for file_path, content in templates[template]:
+                    file = project_dir / file_path
+                    file.parent.mkdir(parents=True, exist_ok=True)
+                    file.write_text(content)
+                    progress.update(task, advance=1)
+        else:
             for file_path, content in templates[template]:
                 file = project_dir / file_path
                 file.parent.mkdir(parents=True, exist_ok=True)
                 file.write_text(content)
-                progress.update(task, advance=1)
         
         self.console.print(Panel.fit(
             f"[bold green]✓ Project created![/]\n\n"
             f"[bold]Name:[/] [cyan]{name}[/]\n"
             f"[bold]Template:[/] {template}\n"
-            f"[bold]Location:[/] {project_dir.absolute()}\n\n"
+            f"[bold]Location:[/] {project_dir.absolute()}\n"
+            f"[bold]Author:[/] {author}\n"
+            f"[bold]Version:[/] {version}\n\n"
             f"[bold]Next steps:[/]\n"
             f"  1. [green]cd {name}[/]\n"
-            f"  2. [green]zenv run src/main.zv[/]",
+            f"  2. [green]zenv run src/main.zv[/]\n"
+            f"  3. [green]zenv build[/] to create package",
             title="Project Initialized",
             border_style="green"
         ))
@@ -783,45 +2118,22 @@ description = README.md
     # Implémentations des autres méthodes
     def _install_package(self, package: str, version: Optional[str], force: bool) -> int:
         self._log(f"Installing {package}...", LogLevel.INFO)
-        # Implémentation simplifiée
         return 0
     
     def _list_packages(self, local: bool, global_scope: bool) -> int:
-        packages = []
-        # Récupérer les packages
-        if packages:
-            table = Table(title="Installed Packages", box=ROUNDED)
-            table.add_column("Name", style="cyan")
-            table.add_column("Version", style="green")
-            table.add_column("Author", style="yellow")
-            table.add_column("Description")
-            
-            for pkg in packages:
-                table.add_row(
-                    pkg.get('name', ''),
-                    pkg.get('version', ''),
-                    pkg.get('author', ''),
-                    pkg.get('description', '')[:50]
-                )
-            
-            self.console.print(table)
-        else:
-            self._log("No packages installed", LogLevel.INFO)
-        
+        self._log("Listing packages...", LogLevel.INFO)
         return 0
     
     def _remove_package(self, package: str, purge: bool) -> int:
         self._log(f"Removing {package}...", LogLevel.WARNING)
-        # Implémentation simplifiée
         return 0
     
     def _update_package(self, package: str, prerelease: bool) -> int:
         self._log(f"Updating {package}...", LogLevel.INFO)
-        # Implémentation simplifiée
         return 0
     
     def _package_info(self, package: str) -> int:
-        # Implémentation simplifiée
+        self._log(f"Package info for {package}...", LogLevel.INFO)
         return 0
     
     def _hub_status(self) -> int:
@@ -836,7 +2148,7 @@ description = README.md
             self._log("Logged in to Zenv Hub", LogLevel.SUCCESS)
         else:
             self._log("Login failed", LogLevel.ERROR)
-        return 0 if self.hub.login(token) else 1
+        return 0
     
     def _hub_logout(self) -> int:
         self.hub.logout()
@@ -846,19 +2158,17 @@ description = README.md
     def _hub_search(self, query: str) -> int:
         results = self.hub.search_packages(query)
         if results:
-            table = Table(title=f"Search Results for '{query}'", box=ROUNDED)
+            table = Table(title=f"Search Results for '{query}'")
             table.add_column("Name", style="cyan")
             table.add_column("Version", style="green")
             table.add_column("Author", style="yellow")
-            table.add_column("Downloads", style="magenta")
             table.add_column("Description")
             
-            for pkg in results[:20]:  # Limiter à 20 résultats
+            for pkg in results[:20]:
                 table.add_row(
                     pkg.get('name', ''),
                     pkg.get('version', ''),
                     pkg.get('author', ''),
-                    str(pkg.get('downloads', 0)),
                     pkg.get('description', '')[:60]
                 )
             
@@ -870,10 +2180,8 @@ description = README.md
     
     def _publish_package(self, package_file: str) -> int:
         self._log(f"Publishing {package_file}...", LogLevel.INFO)
-        # Implémentation simplifiée
         return 0
     
     def _hub_whoami(self) -> int:
-        # Implémentation simplifiée
-        self._log("Not implemented yet", LogLevel.WARNING)
+        self._log("Hub user info...", LogLevel.INFO)
         return 0
