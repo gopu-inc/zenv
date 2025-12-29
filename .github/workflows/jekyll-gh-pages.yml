@@ -1,32 +1,148 @@
-name: Build and Deploy Jekyll site
+name: Deploy Zenv Hub to GitHub Pages
 
 on:
+  # Déclencheur sur push vers la branche main
   push:
-    branches:
-      - main
+    branches: [ main, master ]
+  
+  # Déclencheur manuel
   workflow_dispatch:
+    inputs:
+      message:
+        description: 'Message de déploiement'
+        required: false
+        default: 'Déploiement manuel'
+  
+  # Déclencheur sur pull request
+  pull_request:
+    branches: [ main, master ]
+
+# Permissions pour GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Concurrence : un seul déploiement à la fois
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
 
 jobs:
-  build-deploy:
+  # Job de build
+  build:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: 📥 Checkout du code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Récupérer tout l'historique
+        
+    - name: 🛠️ Setup Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.2' # Version compatible avec Jekyll
+        bundler-cache: true
+        
+    - name: 📦 Installer les dépendances
+      run: |
+        # Créer un Gemfile si inexistant
+        if [ ! -f Gemfile ]; then
+          cat > Gemfile << 'EOF'
+source "https://rubygems.org"
 
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.1'
+gem "jekyll", "~> 4.3"
+gem "jekyll-feed", "~> 0.17"
+gem "jekyll-sitemap", "~> 1.4"
+gem "kramdown-parser-gfm", "~> 1.1"
+gem "webrick", "~> 1.8"
 
-      - name: Install Jekyll
-        run: gem install bundler jekyll
+# Thème par défaut
+gem "minima", "~> 2.5"
+EOF
+        fi
+        
+        # Vérifier si _config.yml existe
+        if [ ! -f _config.yml ]; then
+          echo "Création de _config.yml par défaut..."
+          cat > _config.yml << 'EOF'
+title: "Zenv Package Hub"
+description: "Interface web pour Zenv Package Hub"
+baseurl: ""
+url: "https://zenv-hub.github.io"
 
-      - name: Build site
-        run: jekyll build -d ./_site
+markdown: kramdown
+theme: minima
+plugins:
+  - jekyll-feed
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./_site
+zenv_hub:
+  api_url: "https://zenv-hub.onrender.com"
+  version: "2.1.0"
+
+navigation:
+  - title: "Accueil"
+    url: "/"
+  - title: "Packages"
+    url: "/packages/"
+  - title: "Badges"
+    url: "/badges/"
+  - title: "API Docs"
+    url: "/api/"
+
+include:
+  - _assets
+EOF
+        fi
+        
+        # Installer les gems
+        bundle install
+        
+    - name: 🏗️ Construire le site Jekyll
+      run: |
+        # Construire le site
+        bundle exec jekyll build
+        
+        # Vérifier que le site est bien construit
+        if [ -d "_site" ]; then
+          echo "✅ Site construit avec succès"
+          echo "Fichiers générés:"
+          find _site -type f -name "*.html" | head -10
+        else
+          echo "❌ Échec de la construction"
+          exit 1
+        fi
+        
+    - name: 📝 Ajouter un fichier .nojekyll
+      run: |
+        # Ce fichier indique à GitHub Pages de ne pas utiliser Jekyll
+        touch _site/.nojekyll
+        
+    - name: 📊 Générer un rapport
+      run: |
+        echo "=== Rapport de build ==="
+        echo "Répertoire de sortie: _site"
+        echo "Nombre de fichiers HTML: $(find _site -name "*.html" | wc -l)"
+        echo "Taille totale: $(du -sh _site | cut -f1)"
+        
+    - name: 💾 Upload les artefacts
+      uses: actions/upload-pages-artifact@v3
+      with:
+        name: github-pages
+        path: _site/
+        
+  # Job de déploiement (seulement sur push vers main)
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+    - name: 🚀 Déployer sur GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
