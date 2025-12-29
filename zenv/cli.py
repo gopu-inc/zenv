@@ -5,6 +5,7 @@ import json
 import tarfile
 import tempfile
 import shutil
+import subprocess
 from pathlib import Path
 from typing import List, Optional
 
@@ -196,6 +197,14 @@ file = LICENSE*
         site_dir = Path("/usr/bin/zenv-site/c82")
         site_dir.mkdir(parents=True, exist_ok=True)
         
+        # Créer le PATH dans /usr/.local/zenv
+        zenv_local_path = Path("/usr/.local/zenv")
+        zenv_local_path.mkdir(parents=True, exist_ok=True)
+        
+        # Créer le répertoire bin pour les exécutables
+        zenv_bin_path = zenv_local_path / "bin"
+        zenv_bin_path.mkdir(parents=True, exist_ok=True)
+        
         try:
             # Extraire le nom du package
             with tarfile.open(package_file, 'r:gz') as tar:
@@ -221,8 +230,28 @@ file = LICENSE*
                 # Extraire
                 tar.extractall(package_dir)
                 
+                # Vérifier si le package a un setup.py et essayer pip install
+                setup_py_path = package_dir / "setup.py"
+                if setup_py_path.exists():
+                    print(f"🔨 Building for pack: {package_name}")
+                    try:
+                        # Essayer d'installer avec pip pour voir s'il y a des entrypoints
+                        result = subprocess.run(
+                            ["pip", "install", str(package_dir)],
+                            capture_output=True,
+                            text=True,
+                            check=False
+                        )
+                        if result.returncode == 0:
+                            print(f"✅ Successfully installed {package_name} with pip")
+                        else:
+                            print(f"⚠️  pip install failed: {result.stderr[:100]}")
+                    except Exception as e:
+                        print(f"⚠️  pip install test failed: {e}")
+                
                 print(f"✅ Installed: {package_name}")
                 print(f"📁 Location: {package_dir}")
+                print(f"📁 Local PATH: {zenv_bin_path}")
                 return 0
                 
         except Exception as e:
