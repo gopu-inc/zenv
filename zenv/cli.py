@@ -6,6 +6,8 @@ import tarfile
 import tempfile
 import shutil
 import subprocess
+import time
+import threading
 from pathlib import Path
 from typing import List, Optional
 
@@ -15,6 +17,35 @@ from .runtime import ZenvRuntime
 from .builder import ZenvBuilder
 from .utils.hub_client import ZenvHubClient
 
+class LoadingIndicator:
+    """Jauge de chargement"""
+    
+    def __init__(self, message="Building"):
+        self.message = message
+        self.running = False
+        self.thread = None
+    
+    def _animate(self):
+        chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+        i = 0
+        while self.running:
+            sys.stdout.write(f'\r{self.message} {chars[i % len(chars)]}')
+            sys.stdout.flush()
+            time.sleep(0.1)
+            i += 1
+        sys.stdout.write('\r' + ' ' * 50 + '\r')
+    
+    def start(self):
+        self.running = True
+        self.thread = threading.Thread(target=self._animate)
+        self.thread.daemon = True
+        self.thread.start()
+    
+    def stop(self):
+        self.running = False
+        if self.thread:
+            self.thread.join(timeout=1)
+
 class ZenvCLI:
     
     def __init__(self):
@@ -22,6 +53,7 @@ class ZenvCLI:
         self.runtime = ZenvRuntime()
         self.builder = ZenvBuilder()
         self.hub = ZenvHubClient()
+        self.loading = LoadingIndicator()
         
     def run(self, args: List[str]) -> int:
         parser = argparse.ArgumentParser(prog="zenv")
@@ -50,6 +82,7 @@ class ZenvCLI:
         pkg_sub.add_parser("install", help="Install package").add_argument("package", help="Package name")
         pkg_sub.add_parser("list", help="List packages")
         pkg_sub.add_parser("remove", help="Remove package").add_argument("package", help="Package name")
+        pkg_sub.add_parser("update", help="Update package").add_argument("package", help="Package name")
         
         # Commande hub
         hub_parser = subparsers.add_parser("hub", help="Zenv Hub")
@@ -111,10 +144,14 @@ class ZenvCLI:
             return 1
     
     def _cmd_build(self, name: Optional[str], manifest: str, output: str) -> int:
-        if name:
-            # Créer un manifeste simple
-            with open("package.zcf", "w") as f:
-                f.write(f"""[Zenv]
+        print("🔨 Starting build process...")
+        self.loading.start()
+        
+        try:
+            if name:
+                # Créer un manifeste simple
+                with open("package.zcf", "w") as f:
+                    f.write(f"""[Zenv]
 name = {name}
 version = 1.0.0
 author = Zenv User
@@ -132,10 +169,21 @@ description = README.md
 [license]
 file = LICENSE*
 """)
-            manifest = "package.zcf"
-        
-        result = self.builder.build(manifest, output)
-        return 0 if result else 1
+                manifest = "package.zcf"
+            
+            result = self.builder.build(manifest, output)
+            self.loading.stop()
+            if result:
+                print(f"✅ Build completed successfully!")
+                print(f"📦 Output directory: {output}")
+                return 0
+            else:
+                print("❌ Build failed")
+                return 1
+        except Exception as e:
+            self.loading.stop()
+            print(f"❌ Error during build: {e}")
+            return 1
     
     def _cmd_pkg(self, parsed):
         if parsed.pkg_command == "install":
@@ -144,6 +192,8 @@ file = LICENSE*
             return self._list_packages()
         elif parsed.pkg_command == "remove":
             return self._remove_package(parsed.package)
+        elif parsed.pkg_command == "update":
+            return self._update_package(parsed.package)
         else:
             print(f"❌ Unknown pkg command: {parsed.pkg_command}")
             return 1
@@ -177,12 +227,63 @@ file = LICENSE*
                 print("🔍 No packages found")
             return 0
         elif parsed.hub_command == "publish":
-            if self.hub.upload_package(parsed.file):
-                return 0
-            else:
-                return 1
+            return self._publish_package(parsed.file)
         else:
             print(f"❌ Unknown hub command: {parsed.hub_command}")
+            return 1
+    
+    def _publish_package(self, package_file: str) -> int:
+        """Publier un package avec vérification de doublon"""
+        if not os.path.exists(package_file):
+            print(f"❌ File not found: {package_file}")
+            return 1
+        
+        # Extraire le nom du package
+        try:
+            with tarfile.open(package_file, 'r:gz') as tar:
+                # Chercher metadata.json
+                metadata = None
+                for member in tar.getmembers():
+                    if member.name.endswith('metadata.json'):
+                        f = tar.extractfile(member)
+                        if f:
+                            metadata = json.load(f)
+                            break
+                
+                if metadata:
+                    package_name = metadata.get('name')
+                    package_version = metadata.get('version', '1.0.0')
+                else:
+                    # Extraire du nom de fichier
+                    filename = os.path.basename(package_file)
+                    if filename.endswith('.zv'):
+                        name_version = filename[:-3]
+                        if '-' in name_version:
+                            name, version = name_version.rsplit('-', 1)
+                        else:
+                            name, version = name_version, '1.0.0'
+                    else:
+                        name = Path(package_file).stem
+                        version = '1.0.0'
+                    
+                    package_name = name
+                    package_version = version
+                
+                # Vérifier si le package existe déjà
+                existing_packages = self.hub.search_packages(package_name)
+                for pkg in existing_packages:
+                    if pkg.get('name') == package_name and pkg.get('version') == package_version:
+                        print(f"❌ Package {package_name} v{package_version} already exists!")
+                        print(f"   Use a different version number or package name.")
+                        return 1
+        
+        except Exception as e:
+            print(f"❌ Error checking package: {e}")
+        
+        # Publier le package
+        if self.hub.upload_package(package_file):
+            return 0
+        else:
             return 1
     
     def _cmd_site(self, package_file: str) -> int:
@@ -204,6 +305,12 @@ file = LICENSE*
         # Créer le répertoire bin pour les exécutables
         zenv_bin_path = zenv_local_path / "bin"
         zenv_bin_path.mkdir(parents=True, exist_ok=True)
+        
+        # Créer le répertoire de bibliothèque avec hash SHA256
+        import hashlib
+        hash_obj = hashlib.sha256(b"zenvlib").hexdigest()[:8]
+        zenv_lib_path = Path(f"/usr/lib/zenvlib/c{hash_obj}")
+        zenv_lib_path.mkdir(parents=True, exist_ok=True)
         
         try:
             # Extraire le nom du package
@@ -235,28 +342,145 @@ file = LICENSE*
                 if setup_py_path.exists():
                     print(f"🔨 Building for pack: {package_name}")
                     try:
-                        # Essayer d'installer avec pip pour voir s'il y a des entrypoints
+                        # Créer un environnement temporaire pour pip
+                        temp_env = os.environ.copy()
+                        temp_env['PYTHONPATH'] = str(package_dir) + ':' + temp_env.get('PYTHONPATH', '')
+                        
+                        # Installer en mode développement
                         result = subprocess.run(
-                            ["pip", "install", str(package_dir)],
+                            ["pip", "install", "-e", str(package_dir)],
                             capture_output=True,
                             text=True,
-                            check=False
+                            check=False,
+                            env=temp_env
                         )
+                        
                         if result.returncode == 0:
                             print(f"✅ Successfully installed {package_name} with pip")
+                            
+                            # Chercher les scripts installés par pip
+                            scripts_dir = Path("/usr/local/bin")
+                            for script in scripts_dir.glob("*"):
+                                if script.is_file() and os.access(script, os.X_OK):
+                                    # Copier le script dans notre bin
+                                    shutil.copy2(script, zenv_bin_path / script.name)
+                                    
+                                    # Copier aussi dans la lib avec hash
+                                    lib_script = zenv_lib_path / f"sha_{hashlib.sha256(script.read_bytes()).hexdigest()[:16]}"
+                                    shutil.copy2(script, lib_script)
+                                    lib_script.chmod(0o755)
                         else:
-                            print(f"⚠️  pip install failed: {result.stderr[:100]}")
+                            print(f"⚠️  pip install failed: {result.stderr[:200]}")
                     except Exception as e:
                         print(f"⚠️  pip install test failed: {e}")
+                
+                # Créer les exécutables globaux
+                self._create_global_executables(package_name, package_dir, zenv_lib_path)
                 
                 print(f"✅ Installed: {package_name}")
                 print(f"📁 Location: {package_dir}")
                 print(f"📁 Local PATH: {zenv_bin_path}")
+                print(f"📁 Library PATH: {zenv_lib_path}")
                 return 0
                 
         except Exception as e:
             print(f"❌ Installation error: {e}")
             return 1
+    
+    def _create_global_executables(self, package_name: str, package_dir: Path, zenv_lib_path: Path):
+        """Créer les exécutables globaux"""
+        # Créer /usr/lib/zevx
+        zevx_path = Path("/usr/lib/zevx")
+        with open(zevx_path, 'w') as f:
+            f.write(f'''#!/usr/bin/env python3
+import sys
+import os
+import subprocess
+import hashlib
+from pathlib import Path
+
+def find_script(script_name):
+    """Trouver un script dans les chemins Zenv"""
+    # Chercher dans /usr/.local/zenv/bin
+    zenv_bin = Path("/usr/.local/zenv/bin") / script_name
+    if zenv_bin.exists():
+        return str(zenv_bin)
+    
+    # Chercher dans la lib avec hash
+    lib_dir = Path("{zenv_lib_path}")
+    for file in lib_dir.glob("sha_*"):
+        if file.is_file() and os.access(file, os.X_OK):
+            # Vérifier si c'est le bon script
+            try:
+                with open(file, 'rb') as f:
+                    content = f.read(100)
+                    if script_name.encode() in content:
+                        return str(file)
+            except:
+                pass
+    
+    return None
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: zevx <command> [args...]")
+        sys.exit(1)
+    
+    script_name = sys.argv[1]
+    script_path = find_script(script_name)
+    
+    if script_path:
+        os.execv(script_path, [script_path] + sys.argv[2:])
+    else:
+        print(f"Command not found: {{script_name}}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+''')
+        zevx_path.chmod(0o755)
+        
+        # Créer /usr/bin/zvn8cx
+        zvn8cx_path = Path("/usr/bin/zvn8cx")
+        with open(zvn8cx_path, 'w') as f:
+            f.write(f'''#!/usr/bin/env python3
+import sys
+import os
+import subprocess
+import hashlib
+
+def execute_with_hash():
+    """Exécuter avec vérification de hash"""
+    if len(sys.argv) < 2:
+        print("Usage: zvn8cx <file> [args...]")
+        sys.exit(1)
+    
+    file_path = sys.argv[1]
+    if not os.path.exists(file_path):
+        print(f"File not found: {{file_path}}")
+        sys.exit(1)
+    
+    # Calculer le hash SHA256
+    with open(file_path, 'rb') as f:
+        file_hash = hashlib.sha256(f.read()).hexdigest()
+    
+    print(f"Executing {{file_path}}")
+    print(f"SHA256: {{file_hash}}")
+    
+    # Exécuter le fichier
+    if file_path.endswith('.py'):
+        os.execv(sys.executable, [sys.executable, file_path] + sys.argv[2:])
+    elif file_path.endswith('.zv'):
+        # Utiliser zenv run
+        os.execv(sys.executable, [sys.executable, '-m', 'zenv', 'run', file_path] + sys.argv[2:])
+    else:
+        # Essayer d'exécuter directement
+        os.execv(file_path, [file_path] + sys.argv[2:])
+
+if __name__ == "__main__":
+    execute_with_hash()
+''')
+        zvn8cx_path.chmod(0o755)
     
     def _install_package(self, package_name: str) -> int:
         print(f"📦 Installing {package_name}...")
@@ -277,6 +501,20 @@ file = LICENSE*
             return self._cmd_site(tmp_path)
         finally:
             os.unlink(tmp_path)
+    
+    def _update_package(self, package_name: str) -> int:
+        """Mettre à jour un package"""
+        print(f"🔄 Updating {package_name}...")
+        
+        # D'abord supprimer l'ancienne version
+        site_dir = Path("/usr/bin/zenv-site/c82")
+        package_dir = site_dir / package_name
+        
+        if package_dir.exists():
+            shutil.rmtree(package_dir)
+        
+        # Puis réinstaller
+        return self._install_package(package_name)
     
     def _list_packages(self) -> int:
         site_dir = Path("/usr/bin/zenv-site/c82")
