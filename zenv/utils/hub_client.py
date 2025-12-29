@@ -2,6 +2,8 @@ import requests
 import json
 import os
 import time
+import subprocess
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 import tempfile
@@ -237,33 +239,92 @@ class ZenvHubClient:
                     print(f"❌ Could not find extracted package directory")
                     return False
                 
-                # Vérifier s'il y a un setup.py
+                # Vérifier s'il y a un setup.py ou pyproject.toml
                 setup_py = os.path.join(extracted_dir, 'setup.py')
+                pyproject_toml = os.path.join(extracted_dir, 'pyproject.toml')
+                
+                has_entry_points = False
+                
+                # Vérifier setup.py
                 if os.path.exists(setup_py):
-                    # Lire le setup.py pour vérifier s'il y a des entry_points
                     with open(setup_py, 'r') as f:
                         setup_content = f.read()
+                        if 'entry_points' in setup_content or 'console_scripts' in setup_content:
+                            has_entry_points = True
+                
+                # Vérifier pyproject.toml
+                if os.path.exists(pyproject_toml):
+                    with open(pyproject_toml, 'r') as f:
+                        pyproject_content = f.read()
+                        if 'entry_points' in pyproject_content or 'console_scripts' in pyproject_content or '[project.scripts]' in pyproject_content:
+                            has_entry_points = True
+                
+                # Afficher le message de build
+                print(f"build for Pack: {package_name}")
+                
+                # Installer avec pip install -e si entry points détectés
+                if has_entry_points:
+                    print(f"⚠️  Package {package_name} has entry points, installing with zenv --build --a {package_name} --netwell --toolstack --ej \ as bin/--get")
                     
-                    # Simuler l'installation en silence
-                    print(f"build for Pack: {package_name}")
+                    # Créer le répertoire d'installation
+                    install_dir = f"/usr/bin/zenv-site/c82/{package_name}"
+                    os.makedirs(os.path.dirname(install_dir), exist_ok=True)
                     
-                    # Simuler l'installation pip
-                    print(f"pip install /usr/bin/zenv-site/c82/{package_name}")
+                    # Copier les fichiers du package
+                    import shutil
+                    if os.path.exists(install_dir):
+                        shutil.rmtree(install_dir)
+                    shutil.copytree(extracted_dir, install_dir)
                     
-                    # Si entry_points détectés dans setup.py, ne rien changer
-                    if 'entry_points' in setup_content or 'console_scripts' in setup_content:
-                        print(f"⚠️  Package {package_name} has entry points, keeping as is")
+                    # Installer avec pip install -e
+                    print(f"Executing: pip install -e {install_dir}")
+                    result = subprocess.run(
+                        [sys.executable, "-m", "pip", "install", "-e", install_dir],
+                        capture_output=True,
+                        text=True
+                    )
+                    
+                    if result.returncode == 0:
+                        print(f"✅ Package {package_name} installed successfully with entry points")
+                        print(result.stdout)
                     else:
-                        print(f"📦 Package {package_name} installed without entry points")
-                    
-                    return True
+                        print(f"❌ Failed to install package {package_name}")
+                        print(result.stderr)
+                        return False
                 else:
-                    # Pas de setup.py, traitement normal
-                    print(f"build for Pack: {package_name}")
-                    print(f"pip install /usr/bin/zenv-site/c82/{package_name}")
-                    print(f"✅ Package {package_name} installed (no setup.py found)")
-                    return True
+                    # Installation normale
+                    print(f"📦 Package {package_name} has no entry points, installing normally")
+                    
+                    # Créer le répertoire d'installation
+                    install_dir = f"/usr/bin/zenv-site/c82/{package_name}"
+                    os.makedirs(os.path.dirname(install_dir), exist_ok=True)
+                    
+                    # Copier les fichiers du package
+                    import shutil
+                    if os.path.exists(install_dir):
+                        shutil.rmtree(install_dir)
+                    shutil.copytree(extracted_dir, install_dir)
+                    
+                    # Installer avec pip install
+                    print(f"Executing: pip install {install_dir}")
+                    result = subprocess.run(
+                        [sys.executable, "-m", "pip", "install", install_dir],
+                        capture_output=True,
+                        text=True
+                    )
+                    
+                    if result.returncode == 0:
+                        print(f"✅ Package {package_name} installed successfully")
+                        print(result.stdout)
+                    else:
+                        print(f"❌ Failed to install package {package_name}")
+                        print(result.stderr)
+                        return False
+                
+                return True
                     
         except Exception as e:
             print(f"❌ Installation error: {e}")
+            import traceback
+            traceback.print_exc()
             return False
