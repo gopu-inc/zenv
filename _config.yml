@@ -1,5 +1,41 @@
-title: ZENV Hub
-description: "Documentation et badges pour ZENV"
-baseurl: ""
-url: "https://zenv-hub.onrender.com"
+title: "Zenv Package Hub"
+description: "Interface web pour Zenv Package Hub"
+baseurl: "" # vide si à la racine, sinon "/nom-du-projet"
+url: "https://votre-username.github.io" # ou votre domaine personnalisé
+
+# Paramètres Jekyll
+markdown: kramdown
 theme: minima
+plugins:
+  - jekyll-feed
+
+# Configuration Zenv Hub
+zenv_hub:
+  api_url: "https://zenv-hub.onrender.com"
+  version: "2.1.0"
+
+# Paramètres du site
+header_pages:
+  - index.md
+  - packages.md
+  - badges.md
+  - api.md
+
+# Navigation
+navigation:
+  - title: "Accueil"
+    url: "/"
+  - title: "Packages"
+    url: "/packages/"
+  - title: "Badges"
+    url: "/badges/"
+  - title: "API Docs"
+    url: "/api/"
+  - title: "Upload"
+    url: "/upload/"
+  - title: "Login"
+    url: "/login/"
+
+# Autoriser les fichiers JavaScript et CSS personnalisés
+include:
+  - _assets
