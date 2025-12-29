@@ -128,12 +128,10 @@ class VersionManager:
         """Récupérer la dernière version depuis le hub"""
         try:
             with Spinner("Connexion au hub..."):
-                # Utiliser l'API du hub pour chercher le package zenv-lang
                 hub = ZenvHubClient()
                 packages = hub.search_packages(ZENV_LANG_PACKAGE)
                 
                 if packages:
-                    # Trouver la version la plus récente
                     latest = None
                     for pkg in packages:
                         if pkg.get('name') == ZENV_LANG_PACKAGE:
@@ -143,11 +141,12 @@ class VersionManager:
                     return latest
             return None
         except Exception as e:
+            print(Colors.warning(f"Impossible de vérifier les mises à jour: {e}"))
             return None
     
     @staticmethod
     def _compare_versions(v1: str, v2: str) -> int:
-        """Comparer deux versions (retourne 1 si v1 > v2, -1 si v1 < v2, 0 si égales)"""
+        """Comparer deux versions"""
         def parse(v):
             parts = []
             for part in v.split('.'):
@@ -211,7 +210,7 @@ class AuthManager:
         print(f"\n{Colors.highlight('═' * 50)}")
         print(f"{Colors.highlight('AUTHENTIFICATION REQUISE')}")
         print(f"{Colors.highlight('═' * 50)}")
-        print(f"{Colors.info('Pour utiliser cette fonctionnalité, vous avez besoin d\'un token.')}")
+        print(f"{Colors.info("Pour utiliser cette fonctionnalité, vous avez besoin d'un token.")}")
         print(f"\n{Colors.highlight('1. Rendez-vous sur:')}")
         print(f"   {Colors.color(ZENV_TOKEN_PAGE, Colors.CYAN)}")
         print(f"\n{Colors.highlight('2. Connectez-vous ou créez un compte')}")
@@ -233,10 +232,8 @@ class InstallManager:
         print(f"\n{Colors.highlight(f'Installation de Zenv-Lang v{version}...')}")
         
         try:
-            # Créer un client hub
             hub = ZenvHubClient()
             
-            # Télécharger le package
             with Spinner(f"Téléchargement de zenv-lang-{version}..."):
                 content = hub.download_package(ZENV_LANG_PACKAGE, version)
             
@@ -244,16 +241,12 @@ class InstallManager:
                 print(Colors.error("Échec du téléchargement"))
                 return False
             
-            # Sauvegarder temporairement
             with tempfile.NamedTemporaryFile(suffix='.zv', delete=False) as tmp:
                 tmp.write(content)
                 tmp_path = tmp.name
             
             try:
-                # Nettoyer les anciennes versions
                 InstallManager._clean_old_versions()
-                
-                # Installer la nouvelle version
                 return InstallManager._install_package_file(tmp_path)
             finally:
                 os.unlink(tmp_path)
@@ -266,7 +259,6 @@ class InstallManager:
     def _clean_old_versions():
         """Nettoyer les anciennes versions de zenv"""
         try:
-            # Chercher setup.py et pyproject.toml
             current_dir = Path.cwd()
             for file in current_dir.glob("**/*"):
                 if file.name in ['setup.py', 'pyproject.toml', 'setup.cfg']:
@@ -276,7 +268,6 @@ class InstallManager:
                     except:
                         pass
             
-            # Chercher les anciennes installations zenv
             site_dir = Path("/usr/bin/zenv-site/c82")
             if site_dir.exists():
                 for item in site_dir.iterdir():
@@ -294,7 +285,6 @@ class InstallManager:
         """Installer un fichier package"""
         try:
             with tarfile.open(package_file, 'r:gz') as tar:
-                # Extraire les métadonnées
                 metadata = None
                 for member in tar.getmembers():
                     if member.name.endswith('metadata.json'):
@@ -305,7 +295,6 @@ class InstallManager:
                 
                 package_name = metadata.get('name', 'zenv-lang')
                 
-                # Emplacement d'installation
                 site_dir = Path("/usr/bin/zenv-site/c82")
                 site_dir.mkdir(parents=True, exist_ok=True)
                 
@@ -346,7 +335,6 @@ class ZenvCLI:
     
     def run(self, args: List[str]) -> int:
         """Exécuter la CLI"""
-        # Vérifier les mises à jour au démarrage
         self._check_for_updates_on_start()
         
         parser = self._create_parser()
@@ -358,7 +346,6 @@ class ZenvCLI:
         try:
             parsed = parser.parse_args(args)
             
-            # Dispatch des commandes
             commands = {
                 "run": lambda: self._cmd_run(parsed.file, parsed.args),
                 "build": lambda: self._cmd_build(parsed),
@@ -387,7 +374,6 @@ class ZenvCLI:
     
     def _check_for_updates_on_start(self):
         """Vérifier les mises à jour au démarrage"""
-        # Ne vérifier qu'une fois par jour
         last_check_file = Path.home() / ".zenv" / "last_update_check"
         
         should_check = True
@@ -407,7 +393,6 @@ class ZenvCLI:
                         print(Colors.success("Mise à jour terminée ! Redémarrez zenv."))
                         sys.exit(0)
             
-            # Mettre à jour la date de vérification
             last_check_file.parent.mkdir(exist_ok=True)
             last_check_file.write_text(datetime.now().isoformat())
     
@@ -620,7 +605,6 @@ class ZenvCLI:
     
     def _cmd_init(self, name: str):
         print(Colors.highlight(f"Création du projet: {name}"))
-        # Implémentation simplifiée
         Path(name).mkdir(exist_ok=True)
         (Path(name) / "package.zcf").write_text(f"""[Zenv]
 name = {name}
@@ -636,12 +620,10 @@ version = 1.0.0
                 return 1 if not InstallManager.install_zenv_lang(latest) else 0
         
         print(Colors.info(f"Mise à jour de {package}"))
-        # Implémentation à compléter
         return 0
     
     def _cmd_info(self, package: str):
         print(Colors.highlight(f"Informations: {package}"))
-        # Implémentation à compléter
         return 0
     
     def _cmd_clean(self):
@@ -652,7 +634,6 @@ version = 1.0.0
     
     def _cmd_config(self, action: str, key: str, value: str):
         print(Colors.info(f"Configuration: {action}"))
-        # Implémentation à compléter
         return 0
     
     # ============================================================================
@@ -663,13 +644,11 @@ version = 1.0.0
         """Installer un package"""
         print(Colors.highlight(f"Installation: {package}"))
         
-        # Si c'est zenv-lang, utiliser le gestionnaire d'installation
         if package == ZENV_LANG_PACKAGE:
             ver = version or VersionManager.get_latest_version_from_hub()
             if ver:
                 return 1 if not InstallManager.install_zenv_lang(ver) else 0
         
-        # Sinon, installation normale via hub
         if not AuthManager.check_token():
             print(Colors.warning("Authentification requise"))
             AuthManager.prompt_for_token()
@@ -682,7 +661,6 @@ version = 1.0.0
             print(Colors.error("Package introuvable"))
             return 1
         
-        # Sauvegarder et installer
         with tempfile.NamedTemporaryFile(suffix='.zv', delete=False) as tmp:
             tmp.write(content)
             tmp_path = tmp.name
