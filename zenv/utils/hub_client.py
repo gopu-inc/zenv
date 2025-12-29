@@ -70,7 +70,7 @@ class ZenvHubClient:
             response = requests.get(
                 f"{self.base_url}/api/packages",
                 headers=self._get_headers(),
-                timeout=15
+                timeout=200
             )
             
             if response.status_code == 200:
