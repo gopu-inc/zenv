@@ -11,6 +11,7 @@ import threading
 import hashlib
 import fnmatch
 import itertools
+import requests
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple, Set, Union
@@ -20,6 +21,8 @@ from enum import Enum, auto
 from configparser import ConfigParser
 import inspect
 import re
+import mimetypes
+import base64
 
 from rich.console import Console
 from rich.table import Table
@@ -260,7 +263,7 @@ class ConfigManager:
             max=500
         ))
         
-        # Build System - INCLUSION DE DOSSIERS COMPLETS
+        # Build System
         self._add_param(ConfigParam(
             key="build.default_includes",
             category=ConfigCategory.BUILD,
@@ -358,13 +361,13 @@ class ConfigManager:
             type=bool
         ))
         
-        # Network
+        # Network - CONFIGURATION DU HUB ZENV
         self._add_param(ConfigParam(
             key="network.hub_url",
             category=ConfigCategory.NETWORK,
             name="Hub URL",
             description="Zenv Hub URL",
-            default="https://hub.zenv.org",
+            default="https://zenv-hub.onrender.com",
             type=str
         ))
         
@@ -390,6 +393,44 @@ class ConfigManager:
             max=10
         ))
         
+        # Hub Authentication
+        self._add_param(ConfigParam(
+            key="hub.api_key",
+            category=ConfigCategory.HUB,
+            name="API Key",
+            description="Zenv Hub API key",
+            default="",
+            type=str,
+            hidden=True
+        ))
+        
+        self._add_param(ConfigParam(
+            key="hub.username",
+            category=ConfigCategory.HUB,
+            name="Username",
+            description="Zenv Hub username",
+            default="",
+            type=str
+        ))
+        
+        self._add_param(ConfigParam(
+            key="hub.auto_publish",
+            category=ConfigCategory.HUB,
+            name="Auto Publish",
+            description="Automatically publish after build",
+            default=False,
+            type=bool
+        ))
+        
+        self._add_param(ConfigParam(
+            key="hub.public_packages",
+            category=ConfigCategory.HUB,
+            name="Public Packages",
+            description="Make packages public by default",
+            default=True,
+            type=bool
+        ))
+        
         # Sécurité
         self._add_param(ConfigParam(
             key="security.check_signatures",
@@ -409,7 +450,13 @@ class ConfigManager:
             type=bool
         ))
         
-        # Performance
+        # Générer des paramètres supplémentaires pour atteindre +10,000
+        self._generate_additional_params()
+    
+    def _generate_additional_params(self):
+        """Générer des paramètres supplémentaires"""
+        
+        # Performance (50 paramètres)
         for i in range(1, 51):
             self._add_param(ConfigParam(
                 key=f"performance.optimization_{i:02d}",
@@ -423,7 +470,7 @@ class ConfigManager:
                 hidden=True
             ))
         
-        # Development
+        # Development (100 paramètres)
         for i in range(1, 101):
             self._add_param(ConfigParam(
                 key=f"dev.feature_{i:03d}",
@@ -435,7 +482,7 @@ class ConfigManager:
                 hidden=True
             ))
         
-        # Debugging
+        # Debugging (100 paramètres)
         for i in range(1, 101):
             self._add_param(ConfigParam(
                 key=f"debug.flag_{i:03d}",
@@ -447,7 +494,7 @@ class ConfigManager:
                 hidden=True
             ))
         
-        # Packaging
+        # Packaging (100 paramètres)
         for i in range(1, 101):
             self._add_param(ConfigParam(
                 key=f"packaging.option_{i:03d}",
@@ -474,7 +521,7 @@ class ConfigManager:
                         hidden=True
                     ))
         
-        # Cache
+        # Cache (100 paramètres)
         for i in range(1, 101):
             self._add_param(ConfigParam(
                 key=f"cache.size_{i:02d}",
@@ -499,7 +546,7 @@ class ConfigManager:
                     hidden=True
                 ))
         
-        # Zenv Hub
+        # Zenv Hub (100 paramètres supplémentaires)
         for i in range(1, 101):
             self._add_param(ConfigParam(
                 key=f"hub.setting_{i:03d}",
@@ -511,8 +558,7 @@ class ConfigManager:
                 hidden=True
             ))
         
-        # Paramètres avancés
-        # Générer 5000 paramètres avancés
+        # Paramètres avancés (5000 paramètres)
         categories = ["system", "network", "security", "performance", "optimization"]
         for cat_idx, category in enumerate(categories, 1):
             for i in range(1, 1001):
@@ -527,10 +573,6 @@ class ConfigManager:
                     hidden=True,
                     advanced=True
                 ))
-        
-        # Vérifier qu'on a bien +10,000 paramètres
-        total_params = len(self.params)
-        print(f"✓ Initialized {total_params:,} configuration parameters")
     
     def _add_param(self, param: ConfigParam):
         """Ajouter un paramètre"""
@@ -823,6 +865,192 @@ class FileInclusionSystem:
                                 dirs.add(root_path)
         
         return files, dirs
+
+class ZenvHubAPI:
+    """API client pour Zenv Hub"""
+    
+    def __init__(self, config_manager: ConfigManager):
+        self.config = config_manager
+        self.base_url = config_manager.get("network.hub_url", "https://zenv-hub.onrender.com")
+        self.api_key = config_manager.get("hub.api_key", "")
+        self.timeout = config_manager.get("network.timeout", 30)
+        self.retry_attempts = config_manager.get("network.retry_attempts", 3)
+    
+    def _make_request(self, method: str, endpoint: str, data: Optional[Dict] = None, 
+                     files: Optional[Dict] = None) -> Optional[Dict]:
+        """Faire une requête HTTP"""
+        url = f"{self.base_url}{endpoint}"
+        headers = {}
+        
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        
+        for attempt in range(self.retry_attempts):
+            try:
+                if method.upper() == "GET":
+                    response = requests.get(url, headers=headers, timeout=self.timeout)
+                elif method.upper() == "POST":
+                    if files:
+                        response = requests.post(url, data=data, files=files, 
+                                                headers=headers, timeout=self.timeout)
+                    else:
+                        headers["Content-Type"] = "application/json"
+                        response = requests.post(url, json=data, 
+                                                headers=headers, timeout=self.timeout)
+                elif method.upper() == "PUT":
+                    headers["Content-Type"] = "application/json"
+                    response = requests.put(url, json=data, headers=headers, timeout=self.timeout)
+                elif method.upper() == "DELETE":
+                    response = requests.delete(url, headers=headers, timeout=self.timeout)
+                else:
+                    return None
+                
+                # Vérifier le statut
+                if response.status_code == 200:
+                    return response.json()
+                elif response.status_code == 201:
+                    return response.json()
+                elif response.status_code == 401:
+                    print(f"Authentication failed: {response.text}")
+                    return None
+                elif response.status_code == 403:
+                    print(f"Permission denied: {response.text}")
+                    return None
+                elif response.status_code == 404:
+                    print(f"Endpoint not found: {url}")
+                    return None
+                else:
+                    print(f"HTTP {response.status_code}: {response.text}")
+                    if attempt < self.retry_attempts - 1:
+                        time.sleep(1 * (attempt + 1))  # Backoff exponentiel
+                        continue
+                    return None
+                    
+            except requests.exceptions.Timeout:
+                print(f"Request timeout for {url}")
+                if attempt < self.retry_attempts - 1:
+                    time.sleep(1 * (attempt + 1))
+                    continue
+                return None
+            except requests.exceptions.ConnectionError:
+                print(f"Connection error for {url}")
+                if attempt < self.retry_attempts - 1:
+                    time.sleep(1 * (attempt + 1))
+                    continue
+                return None
+            except Exception as e:
+                print(f"Request error: {e}")
+                return None
+        
+        return None
+    
+    def check_status(self) -> bool:
+        """Vérifier si le hub est en ligne"""
+        try:
+            response = requests.get(f"{self.base_url}/api/status", timeout=5)
+            return response.status_code == 200
+        except:
+            return False
+    
+    def login(self, api_key: str) -> bool:
+        """Se connecter au hub"""
+        self.api_key = api_key
+        self.config.set("hub.api_key", api_key)
+        
+        # Tester la connexion
+        result = self._make_request("GET", "/api/auth/verify")
+        if result:
+            print(f"Logged in as: {result.get('username', 'Unknown')}")
+            return True
+        return False
+    
+    def logout(self):
+        """Se déconnecter"""
+        self.api_key = ""
+        self.config.set("hub.api_key", "")
+    
+    def search_packages(self, query: str) -> List[Dict]:
+        """Rechercher des packages"""
+        result = self._make_request("GET", f"/api/packages/search?q={query}")
+        return result.get("packages", []) if result else []
+    
+    def upload_package(self, package_file: str, metadata: Dict) -> Optional[Dict]:
+        """Uploader un package"""
+        if not os.path.exists(package_file):
+            print(f"Package file not found: {package_file}")
+            return None
+        
+        # Lire le fichier
+        with open(package_file, 'rb') as f:
+            package_data = f.read()
+        
+        # Calculer le hash
+        file_hash = hashlib.sha256(package_data).hexdigest()
+        
+        # Préparer les données
+        files = {
+            'package': (os.path.basename(package_file), package_data, 'application/gzip')
+        }
+        
+        data = {
+            'name': metadata.get('name', ''),
+            'version': metadata.get('version', '1.0.0'),
+            'description': metadata.get('description', ''),
+            'author': metadata.get('author', ''),
+            'license': metadata.get('license', 'MIT'),
+            'dependencies': json.dumps(metadata.get('dependencies', [])),
+            'hash': file_hash,
+            'size': os.path.getsize(package_file)
+        }
+        
+        return self._make_request("POST", "/api/packages/upload", data=data, files=files)
+    
+    def get_package_info(self, package_name: str, version: Optional[str] = None) -> Optional[Dict]:
+        """Obtenir les informations d'un package"""
+        endpoint = f"/api/packages/{package_name}"
+        if version:
+            endpoint += f"/{version}"
+        
+        return self._make_request("GET", endpoint)
+    
+    def download_package(self, package_name: str, version: Optional[str] = None) -> Optional[bytes]:
+        """Télécharger un package"""
+        endpoint = f"/api/packages/{package_name}/download"
+        if version:
+            endpoint += f"?version={version}"
+        
+        url = f"{self.base_url}{endpoint}"
+        headers = {}
+        
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        
+        try:
+            response = requests.get(url, headers=headers, timeout=self.timeout)
+            if response.status_code == 200:
+                return response.content
+        except:
+            pass
+        
+        return None
+    
+    def get_user_info(self) -> Optional[Dict]:
+        """Obtenir les informations de l'utilisateur"""
+        return self._make_request("GET", "/api/user")
+    
+    def list_user_packages(self) -> List[Dict]:
+        """Lister les packages de l'utilisateur"""
+        result = self._make_request("GET", "/api/user/packages")
+        return result.get("packages", []) if result else []
+    
+    def delete_package(self, package_name: str, version: Optional[str] = None) -> bool:
+        """Supprimer un package"""
+        endpoint = f"/api/packages/{package_name}"
+        if version:
+            endpoint += f"/{version}"
+        
+        result = self._make_request("DELETE", endpoint)
+        return result is not None and result.get("success", False)
 
 class InteractiveConfigurator:
     """Configurateur interactif"""
@@ -1223,6 +1451,10 @@ class ZenvCLI:
         self.config_dir = Path.home() / ".zenv"
         self.config_manager = ConfigManager(self.config_dir)
         
+        # Afficher le nombre de paramètres initialisés
+        total_params = len(self.config_manager.params)
+        print(f"✓ Initialized {total_params:,} configuration parameters")
+        
         # Initialiser le gestionnaire de thèmes
         self.theme_manager = ThemeManager(self.config_manager)
         
@@ -1241,7 +1473,10 @@ class ZenvCLI:
         self.transpiler = ZenvTranspiler()
         self.runtime = ZenvRuntime()
         self.builder = ZenvBuilder()
-        self.hub = ZenvHubClient()
+        
+        # Initialiser l'API Zenv Hub avec le nouveau client
+        self.hub = ZenvHubAPI(self.config_manager)
+        
         self.file_system = FileInclusionSystem()
         
         # Configurateur interactif
@@ -1322,7 +1557,7 @@ class ZenvCLI:
   [green]zenv transpile app.zv[/]    Transpile to Python
   [green]zenv build[/]               Build a package
   [green]zenv config set[/]          Configure parameters
-  [green]zenv pkg install numpy[/]   Install a package"""
+  [green]zenv hub publish[/]         Publish to Zenv Hub"""
         )
         
         subparsers = parser.add_subparsers(dest="command", title="Commands", metavar="")
@@ -1357,7 +1592,7 @@ class ZenvCLI:
         build_group.add_argument("--no-default-includes", action="store_true", help="Don't use default includes")
         build_group.add_argument("--no-default-excludes", action="store_true", help="Don't use default excludes")
         
-        # Commande config - NOUVELLE COMMANDE INTERACTIVE
+        # Commande config
         config_parser = subparsers.add_parser("config", help="Configure Zenv (interactive)")
         config_sub = config_parser.add_subparsers(dest="config_command", help="Config commands")
         
@@ -1400,16 +1635,56 @@ class ZenvCLI:
         # Info
         pkg_sub.add_parser("info", help="Show package info").add_argument("package", help="Package name")
         
-        # Commande hub
-        hub_parser = subparsers.add_parser("hub", help="Zenv Hub")
+        # Commande hub - AMÉLIORÉE POUR LA PUBLICATION
+        hub_parser = subparsers.add_parser("hub", help="Zenv Hub Integration")
         hub_sub = hub_parser.add_subparsers(dest="hub_command", help="Hub commands")
         
+        # Status
         hub_sub.add_parser("status", help="Check hub status")
-        hub_sub.add_parser("login", help="Login to hub").add_argument("token", help="Auth token")
-        hub_sub.add_parser("logout", help="Logout")
-        hub_sub.add_parser("search", help="Search packages").add_argument("query", help="Search query")
-        hub_sub.add_parser("publish", help="Publish package").add_argument("file", help="Package file")
-        hub_sub.add_parser("whoami", help="Show current user")
+        
+        # Login
+        login_parser = hub_sub.add_parser("login", help="Login to Zenv Hub")
+        login_parser.add_argument("--token", help="API token (prompt if not provided)")
+        
+        # Logout
+        hub_sub.add_parser("logout", help="Logout from Zenv Hub")
+        
+        # Search
+        search_parser = hub_sub.add_parser("search", help="Search packages")
+        search_parser.add_argument("query", help="Search query")
+        search_parser.add_argument("--limit", type=int, default=20, help="Max results")
+        
+        # Publish - COMMANDE COMPLÈTE
+        publish_parser = hub_sub.add_parser("publish", help="Publish package to Zenv Hub")
+        publish_parser.add_argument("file", help="Package file (.zv) to publish")
+        publish_parser.add_argument("--force", action="store_true", help="Overwrite existing package")
+        publish_parser.add_argument("--public", action="store_true", help="Make package public")
+        publish_parser.add_argument("--private", action="store_true", help="Make package private")
+        publish_parser.add_argument("--description", help="Package description")
+        publish_parser.add_argument("--license", help="Package license", default="MIT")
+        
+        # Download
+        download_parser = hub_sub.add_parser("download", help="Download package")
+        download_parser.add_argument("package", help="Package name")
+        download_parser.add_argument("--version", help="Specific version")
+        download_parser.add_argument("--output", "-o", help="Output directory")
+        
+        # Info
+        info_parser = hub_sub.add_parser("info", help="Package info")
+        info_parser.add_argument("package", help="Package name")
+        info_parser.add_argument("--version", help="Specific version")
+        
+        # List user packages
+        hub_sub.add_parser("list", help="List your packages")
+        
+        # Delete
+        delete_parser = hub_sub.add_parser("delete", help="Delete package")
+        delete_parser.add_argument("package", help="Package name")
+        delete_parser.add_argument("--version", help="Specific version")
+        delete_parser.add_argument("--force", action="store_true", help="Force delete without confirmation")
+        
+        # Whoami
+        hub_sub.add_parser("whoami", help="Show current user info")
         
         # Commande version
         subparsers.add_parser("version", help="Show version")
@@ -1685,10 +1960,52 @@ file = LICENSE*
             logger.exception("Build failed:")
             return 1
     
+    def _analyze_package(self, package_path: Path) -> PackageInfo:
+        """Analyser un package"""
+        try:
+            with tarfile.open(package_path, 'r:gz') as tar:
+                # Chercher metadata.json
+                for member in tar.getmembers():
+                    if member.name.endswith('metadata.json'):
+                        f = tar.extractfile(member)
+                        if f:
+                            metadata = json.load(f)
+                            return PackageInfo.from_dict(metadata)
+        except:
+            pass
+        
+        # Fallback - analyser le nom du fichier
+        filename = package_path.name
+        if filename.endswith('.zv'):
+            name_version = filename[:-3]
+            if '-' in name_version:
+                name, version = name_version.rsplit('-', 1)
+            else:
+                name, version = name_version, '1.0.0'
+        else:
+            name = package_path.stem
+            version = '1.0.0'
+        
+        return PackageInfo(
+            name=name,
+            version=version,
+            author="Unknown",
+            description="Zenv package",
+            license="MIT",
+            dependencies=[],
+            created_at=datetime.now().isoformat(),
+            size=package_path.stat().st_size,
+            hash=hashlib.sha256(package_path.read_bytes()).hexdigest()
+        )
+    
+    def _run_tests(self, output_dir: str) -> bool:
+        """Exécuter les tests"""
+        self._log("Running tests...", LogLevel.INFO)
+        return True
+    
     def _cmd_config(self, parsed):
         """Gestion de la configuration"""
         if parsed.config_command == "set":
-            # Lancer le configurateur interactif
             self.configurator.run()
             return 0
         elif parsed.config_command == "get":
@@ -1796,72 +2113,538 @@ file = LICENSE*
                 
                 self.console.print(table)
     
-    def _analyze_package(self, package_path: Path) -> PackageInfo:
-        """Analyser un package"""
-        try:
-            with tarfile.open(package_path, 'r:gz') as tar:
-                # Chercher metadata.json
-                for member in tar.getmembers():
-                    if member.name.endswith('metadata.json'):
-                        f = tar.extractfile(member)
-                        if f:
-                            metadata = json.load(f)
-                            return PackageInfo.from_dict(metadata)
-        except:
-            pass
-        
-        # Fallback
-        return PackageInfo(
-            name=package_path.stem,
-            version="1.0.0",
-            author="Unknown",
-            description="Zenv package",
-            license="MIT",
-            dependencies=[],
-            created_at=datetime.now().isoformat(),
-            size=package_path.stat().st_size,
-            hash=hashlib.sha256(package_path.read_bytes()).hexdigest()
-        )
-    
-    def _run_tests(self, output_dir: str) -> bool:
-        """Exécuter les tests"""
-        self._log("Running tests...", LogLevel.INFO)
-        # Implémentation simplifiée
-        return True
-    
-    def _cmd_pkg(self, parsed):
-        """Gestion des packages"""
-        if parsed.pkg_command == "install":
-            return self._install_package(parsed.package, getattr(parsed, 'version', None), getattr(parsed, 'force', False))
-        elif parsed.pkg_command == "list":
-            return self._list_packages(getattr(parsed, 'local', False), getattr(parsed, 'global_scope', False))
-        elif parsed.pkg_command == "remove":
-            return self._remove_package(parsed.package, getattr(parsed, 'purge', False))
-        elif parsed.pkg_command == "update":
-            return self._update_package(parsed.package, getattr(parsed, 'prerelease', False))
-        elif parsed.pkg_command == "info":
-            return self._package_info(parsed.package)
-        else:
-            self._log(f"Unknown pkg command: {parsed.pkg_command}", LogLevel.ERROR)
-            return 1
-    
     def _cmd_hub(self, parsed):
-        """Commandes du hub"""
+        """Commandes du Zenv Hub"""
         if parsed.hub_command == "status":
             return self._hub_status()
         elif parsed.hub_command == "login":
-            return self._hub_login(parsed.token)
+            return self._hub_login(parsed)
         elif parsed.hub_command == "logout":
             return self._hub_logout()
         elif parsed.hub_command == "search":
-            return self._hub_search(parsed.query)
+            return self._hub_search(parsed.query, parsed.limit)
         elif parsed.hub_command == "publish":
-            return self._publish_package(parsed.file)
+            return self._hub_publish(parsed)
+        elif parsed.hub_command == "download":
+            return self._hub_download(parsed.package, parsed.version, parsed.output)
+        elif parsed.hub_command == "info":
+            return self._hub_info(parsed.package, parsed.version)
+        elif parsed.hub_command == "list":
+            return self._hub_list_packages()
+        elif parsed.hub_command == "delete":
+            return self._hub_delete(parsed.package, parsed.version, parsed.force)
         elif parsed.hub_command == "whoami":
             return self._hub_whoami()
         else:
             self._log(f"Unknown hub command: {parsed.hub_command}", LogLevel.ERROR)
             return 1
+    
+    def _hub_status(self) -> int:
+        """Vérifier le statut du hub"""
+        self._print_header()
+        
+        hub_url = self.config_manager.get("network.hub_url", "https://zenv-hub.onrender.com")
+        self.console.print(Panel.fit(
+            f"[bold]Zenv Hub Status Check[/]\n"
+            f"[dim]URL:[/] {hub_url}",
+            border_style="cyan"
+        ))
+        
+        self._log(f"Checking hub status at {hub_url}...", LogLevel.INFO)
+        
+        if self.hub.check_status():
+            self._log("Zenv Hub: ✅ Online", LogLevel.SUCCESS)
+            
+            # Obtenir des infos supplémentaires
+            try:
+                response = requests.get(f"{hub_url}/api/status", timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    self.console.print(Panel.fit(
+                        f"[bold]Hub Information:[/]\n"
+                        f"[dim]Version:[/] {data.get('version', 'Unknown')}\n"
+                        f"[dim]Status:[/] {data.get('status', 'Unknown')}\n"
+                        f"[dim]Uptime:[/] {data.get('uptime', 'Unknown')}",
+                        border_style="green"
+                    ))
+            except:
+                pass
+        else:
+            self._log("Zenv Hub: ❌ Offline", LogLevel.ERROR)
+            self.console.print(Panel.fit(
+                "[bold red]Cannot connect to Zenv Hub[/]\n\n"
+                "[dim]Possible reasons:[/]\n"
+                "• Hub server is down\n"
+                "• Network connection issue\n"
+                "• Incorrect hub URL\n"
+                "• Firewall blocking connection",
+                border_style="red"
+            ))
+        
+        self._print_footer()
+        return 0
+    
+    def _hub_login(self, parsed) -> int:
+        """Se connecter au Zenv Hub"""
+        self._print_header()
+        
+        api_key = parsed.token
+        if not api_key:
+            api_key = Prompt.ask("Enter your Zenv Hub API token", password=True)
+        
+        if not api_key:
+            self._log("Login cancelled", LogLevel.WARNING)
+            return 0
+        
+        self._log("Authenticating with Zenv Hub...", LogLevel.INFO)
+        
+        if self.hub.login(api_key):
+            self._log("✅ Successfully logged in to Zenv Hub", LogLevel.SUCCESS)
+            
+            # Obtenir les infos utilisateur
+            user_info = self.hub.get_user_info()
+            if user_info:
+                self.console.print(Panel.fit(
+                    f"[bold]Welcome, {user_info.get('username', 'User')}![/]\n"
+                    f"[dim]Email:[/] {user_info.get('email', 'Not provided')}\n"
+                    f"[dim]Packages:[/] {user_info.get('package_count', 0)} published\n"
+                    f"[dim]Member since:[/] {user_info.get('created_at', 'Unknown')}",
+                    border_style="green"
+                ))
+        else:
+            self._log("❌ Login failed", LogLevel.ERROR)
+            self.console.print(Panel.fit(
+                "[bold red]Authentication failed[/]\n\n"
+                "[dim]Possible reasons:[/]\n"
+                "• Invalid API token\n"
+                "• Account disabled\n"
+                "• Network issue\n\n"
+                "[dim]Get your API token from:[/]\n"
+                f"{self.config_manager.get('network.hub_url')}/dashboard",
+                border_style="red"
+            ))
+            return 1
+        
+        self._print_footer()
+        return 0
+    
+    def _hub_logout(self) -> int:
+        """Se déconnecter du Zenv Hub"""
+        self.hub.logout()
+        self._log("✅ Logged out from Zenv Hub", LogLevel.SUCCESS)
+        return 0
+    
+    def _hub_search(self, query: str, limit: int) -> int:
+        """Rechercher des packages"""
+        self._print_header()
+        
+        self._log(f"Searching for '{query}'...", LogLevel.INFO)
+        
+        packages = self.hub.search_packages(query)
+        
+        if packages:
+            # Limiter les résultats
+            packages = packages[:limit]
+            
+            table = Table(title=f"Search Results for '{query}'")
+            table.add_column("Package", style="cyan")
+            table.add_column("Version", style="green")
+            table.add_column("Author", style="yellow")
+            table.add_column("Downloads", style="magenta")
+            table.add_column("Description")
+            
+            for pkg in packages:
+                table.add_row(
+                    pkg.get('name', 'Unknown'),
+                    pkg.get('version', '1.0.0'),
+                    pkg.get('author', 'Unknown'),
+                    str(pkg.get('downloads', 0)),
+                    pkg.get('description', '')[:60]
+                )
+            
+            self.console.print(table)
+            self.console.print(f"[dim]Found {len(packages)} packages[/]")
+        else:
+            self.console.print(Panel.fit(
+                f"[bold yellow]No packages found for '{query}'[/]\n\n"
+                f"[dim]Try:[/]\n"
+                f"• Different search terms\n"
+                f"• Browse all packages\n"
+                f"• Check spelling",
+                border_style="yellow"
+            ))
+        
+        self._print_footer()
+        return 0
+    
+    def _hub_publish(self, parsed) -> int:
+        """Publier un package sur Zenv Hub"""
+        self._print_header()
+        
+        package_file = parsed.file
+        
+        # Vérifier le fichier
+        if not os.path.exists(package_file):
+            self._log(f"Package file not found: {package_file}", LogLevel.ERROR)
+            return 1
+        
+        # Analyser le package
+        package_path = Path(package_file)
+        package_info = self._analyze_package(package_path)
+        
+        # Afficher les informations
+        self.console.print(Panel.fit(
+            f"[bold]Publishing Package[/]\n\n"
+            f"[bold]Name:[/] [cyan]{package_info.name}[/]\n"
+            f"[bold]Version:[/] {package_info.version}\n"
+            f"[bold]Size:[/] {package_info.size:,} bytes\n"
+            f"[bold]Hash:[/] [dim]{package_info.hash[:16]}...[/]\n"
+            f"[bold]Visibility:[/] {'Public' if parsed.public else 'Private'}",
+            title="Publication Details",
+            border_style="yellow"
+        ))
+        
+        # Vérifier la connexion
+        self._log("Checking hub connection...", LogLevel.INFO)
+        if not self.hub.check_status():
+            self._log("Zenv Hub is unreachable", LogLevel.ERROR)
+            self.console.print(Panel.fit(
+                "[bold red]Cannot connect to Zenv Hub[/]\n\n"
+                "[dim]Please check:[/]\n"
+                "• Internet connection\n"
+                "• Hub status (zenv hub status)\n"
+                "• Firewall settings",
+                border_style="red"
+            ))
+            return 1
+        
+        # Vérifier l'authentification
+        api_key = self.config_manager.get("hub.api_key", "")
+        if not api_key:
+            self._log("You need to login first", LogLevel.WARNING)
+            if not Confirm.ask("Login now?"):
+                return 1
+            api_key = Prompt.ask("Enter your Zenv Hub API token", password=True)
+            if not self.hub.login(api_key):
+                self._log("Login failed", LogLevel.ERROR)
+                return 1
+        
+        # Vérifier si le package existe déjà
+        existing = self.hub.get_package_info(package_info.name, package_info.version)
+        if existing and not parsed.force:
+            self.console.print(Panel.fit(
+                f"[bold red]Package already exists![/]\n\n"
+                f"[bold]Package:[/] {package_info.name} v{package_info.version}\n"
+                f"[bold]Author:[/] {existing.get('author', 'Unknown')}\n"
+                f"[bold]Published:[/] {existing.get('created_at', 'Unknown')}\n\n"
+                f"[dim]Options:[/]\n"
+                f"1. Update version number\n"
+                f"2. Use --force to overwrite\n"
+                f"3. Cancel publication",
+                title="Conflict Detected",
+                border_style="red"
+            ))
+            
+            choice = Prompt.ask("Choose option", choices=["1", "2", "3"], default="3")
+            if choice == "1":
+                new_version = Prompt.ask("Enter new version")
+                package_info.version = new_version
+            elif choice == "2":
+                if not Confirm.ask("[red]WARNING:[/] Overwrite existing package?"):
+                    return 0
+            else:
+                self._log("Publication cancelled", LogLevel.WARNING)
+                return 0
+        
+        # Confirmation finale
+        if not Confirm.ask("Proceed with publication?"):
+            self._log("Publication cancelled", LogLevel.WARNING)
+            return 0
+        
+        # Préparer les métadonnées
+        metadata = {
+            'name': package_info.name,
+            'version': package_info.version,
+            'description': parsed.description or package_info.description,
+            'author': package_info.author,
+            'license': parsed.license or package_info.license,
+            'dependencies': package_info.dependencies,
+            'visibility': 'public' if parsed.public else 'private'
+        }
+        
+        # Publier le package
+        self._log("Uploading package...", LogLevel.INFO)
+        
+        progress = self._create_progress("Uploading...")
+        if progress:
+            with progress:
+                task = progress.add_task("[cyan]Uploading...", total=100)
+                result = self.hub.upload_package(package_file, metadata)
+                progress.update(task, completed=100)
+        else:
+            result = self.hub.upload_package(package_file, metadata)
+        
+        if result:
+            self._log("✅ Package published successfully!", LogLevel.SUCCESS)
+            
+            self.console.print(Panel.fit(
+                f"[bold green]Publication Successful![/]\n\n"
+                f"[bold]Package:[/] [cyan]{package_info.name}[/] v{package_info.version}\n"
+                f"[bold]URL:[/] {self.config_manager.get('network.hub_url')}/packages/{package_info.name}\n"
+                f"[bold]Install with:[/] [green]zenv pkg install {package_info.name}[/]\n"
+                f"[bold]Size:[/] {package_info.size:,} bytes",
+                border_style="green"
+            ))
+            
+            # Publication automatique optionnelle
+            if self.config_manager.get("hub.auto_publish", False):
+                self._log("Auto-publish enabled", LogLevel.INFO)
+        else:
+            self._log("❌ Publication failed", LogLevel.ERROR)
+            self.console.print(Panel.fit(
+                "[bold red]Publication failed[/]\n\n"
+                "[dim]Possible reasons:[/]\n"
+                "• Network error\n"
+                "• Server error\n"
+                "• Package too large\n"
+                "• Invalid package format",
+                border_style="red"
+            ))
+            return 1
+        
+        self._print_footer()
+        return 0
+    
+    def _hub_download(self, package_name: str, version: Optional[str], output: Optional[str]) -> int:
+        """Télécharger un package depuis Zenv Hub"""
+        self._print_header()
+        
+        self._log(f"Downloading {package_name}...", LogLevel.INFO)
+        
+        # Vérifier la connexion
+        if not self.hub.check_status():
+            self._log("Zenv Hub is unreachable", LogLevel.ERROR)
+            return 1
+        
+        # Obtenir les infos du package
+        package_info = self.hub.get_package_info(package_name, version)
+        if not package_info:
+            self._log(f"Package not found: {package_name}", LogLevel.ERROR)
+            return 1
+        
+        # Afficher les informations
+        self.console.print(Panel.fit(
+            f"[bold]Downloading Package[/]\n\n"
+            f"[bold]Name:[/] [cyan]{package_info.get('name')}[/]\n"
+            f"[bold]Version:[/] {package_info.get('version')}\n"
+            f"[bold]Author:[/] {package_info.get('author', 'Unknown')}\n"
+            f"[bold]Size:[/] {package_info.get('size', 0):,} bytes\n"
+            f"[bold]Downloads:[/] {package_info.get('downloads', 0)}",
+            border_style="yellow"
+        ))
+        
+        # Télécharger
+        self._log("Downloading package data...", LogLevel.INFO)
+        
+        package_data = self.hub.download_package(package_name, version)
+        if not package_data:
+            self._log("Download failed", LogLevel.ERROR)
+            return 1
+        
+        # Déterminer le chemin de sortie
+        if output:
+            output_path = Path(output)
+            if output_path.is_dir():
+                output_file = output_path / f"{package_name}-{package_info.get('version')}.zv"
+            else:
+                output_file = output_path
+        else:
+            output_file = Path(f"{package_name}-{package_info.get('version')}.zv")
+        
+        # Sauvegarder
+        with open(output_file, 'wb') as f:
+            f.write(package_data)
+        
+        self._log(f"✅ Package downloaded: {output_file}", LogLevel.SUCCESS)
+        self.console.print(Panel.fit(
+            f"[bold green]Download Complete![/]\n\n"
+            f"[bold]Saved to:[/] {output_file.absolute()}\n"
+            f"[bold]Size:[/] {len(package_data):,} bytes\n"
+            f"[bold]Install with:[/] [green]zenv site {output_file.name}[/]",
+            border_style="green"
+        ))
+        
+        self._print_footer()
+        return 0
+    
+    def _hub_info(self, package_name: str, version: Optional[str]) -> int:
+        """Afficher les informations d'un package"""
+        self._print_header()
+        
+        package_info = self.hub.get_package_info(package_name, version)
+        if not package_info:
+            self._log(f"Package not found: {package_name}", LogLevel.ERROR)
+            return 1
+        
+        # Afficher les informations détaillées
+        table = Table(title=f"Package: {package_info.get('name')}")
+        table.add_column("Property", style="cyan")
+        table.add_column("Value", style="green")
+        
+        table.add_row("Name", package_info.get('name', 'Unknown'))
+        table.add_row("Version", package_info.get('version', '1.0.0'))
+        table.add_row("Author", package_info.get('author', 'Unknown'))
+        table.add_row("Description", package_info.get('description', ''))
+        table.add_row("License", package_info.get('license', 'MIT'))
+        table.add_row("Size", f"{package_info.get('size', 0):,} bytes")
+        table.add_row("Downloads", str(package_info.get('downloads', 0)))
+        table.add_row("Created", package_info.get('created_at', 'Unknown'))
+        table.add_row("Updated", package_info.get('updated_at', 'Unknown'))
+        table.add_row("Visibility", package_info.get('visibility', 'public'))
+        
+        self.console.print(table)
+        
+        # Afficher les dépendances
+        deps = package_info.get('dependencies', [])
+        if deps:
+            self.console.print("\n[bold]Dependencies:[/]")
+            for dep in deps:
+                self.console.print(f"  • {dep}")
+        
+        self._print_footer()
+        return 0
+    
+    def _hub_list_packages(self) -> int:
+        """Lister les packages de l'utilisateur"""
+        self._print_header()
+        
+        # Vérifier l'authentification
+        api_key = self.config_manager.get("hub.api_key", "")
+        if not api_key:
+            self._log("You need to login first", LogLevel.WARNING)
+            return 1
+        
+        packages = self.hub.list_user_packages()
+        
+        if packages:
+            table = Table(title="Your Packages")
+            table.add_column("Name", style="cyan")
+            table.add_column("Version", style="green")
+            table.add_column("Visibility", style="yellow")
+            table.add_column("Downloads", style="magenta")
+            table.add_column("Last Updated")
+            
+            for pkg in packages:
+                table.add_row(
+                    pkg.get('name', 'Unknown'),
+                    pkg.get('version', '1.0.0'),
+                    pkg.get('visibility', 'public'),
+                    str(pkg.get('downloads', 0)),
+                    pkg.get('updated_at', '')[:10]
+                )
+            
+            self.console.print(table)
+            self.console.print(f"[dim]Total: {len(packages)} packages[/]")
+        else:
+            self.console.print(Panel.fit(
+                "[bold yellow]No packages published yet[/]\n\n"
+                "[dim]To publish your first package:[/]\n"
+                "1. [green]zenv build[/] to create package\n"
+                "2. [green]zenv hub publish[/] to upload\n"
+                "3. Share with the community!",
+                border_style="yellow"
+            ))
+        
+        self._print_footer()
+        return 0
+    
+    def _hub_delete(self, package_name: str, version: Optional[str], force: bool) -> int:
+        """Supprimer un package"""
+        self._print_header()
+        
+        # Vérifier l'authentification
+        api_key = self.config_manager.get("hub.api_key", "")
+        if not api_key:
+            self._log("You need to login first", LogLevel.WARNING)
+            return 1
+        
+        # Obtenir les infos du package
+        package_info = self.hub.get_package_info(package_name, version)
+        if not package_info:
+            self._log(f"Package not found: {package_name}", LogLevel.ERROR)
+            return 1
+        
+        # Afficher les informations
+        self.console.print(Panel.fit(
+            f"[bold red]⚠️ Delete Package[/]\n\n"
+            f"[bold]Name:[/] [cyan]{package_info.get('name')}[/]\n"
+            f"[bold]Version:[/] {package_info.get('version')}\n"
+            f"[bold]Author:[/] {package_info.get('author', 'Unknown')}\n"
+            f"[bold]Downloads:[/] {package_info.get('downloads', 0)}\n"
+            f"[bold]Created:[/] {package_info.get('created_at', 'Unknown')}",
+            border_style="red"
+        ))
+        
+        # Confirmation
+        if not force and not Confirm.ask("[red]WARNING:[/] This action cannot be undone. Delete package?"):
+            self._log("Deletion cancelled", LogLevel.WARNING)
+            return 0
+        
+        # Supprimer
+        if self.hub.delete_package(package_name, version):
+            self._log("✅ Package deleted successfully", LogLevel.SUCCESS)
+        else:
+            self._log("❌ Failed to delete package", LogLevel.ERROR)
+            return 1
+        
+        self._print_footer()
+        return 0
+    
+    def _hub_whoami(self) -> int:
+        """Afficher les informations de l'utilisateur"""
+        self._print_header()
+        
+        # Vérifier l'authentification
+        api_key = self.config_manager.get("hub.api_key", "")
+        if not api_key:
+            self._log("You are not logged in", LogLevel.WARNING)
+            self.console.print(Panel.fit(
+                "[bold yellow]Not logged in[/]\n\n"
+                "[dim]To login:[/]\n"
+                "[green]zenv hub login[/]\n\n"
+                "[dim]Get your API token from:[/]\n"
+                f"{self.config_manager.get('network.hub_url')}/dashboard",
+                border_style="yellow"
+            ))
+            return 0
+        
+        user_info = self.hub.get_user_info()
+        if not user_info:
+            self._log("Failed to get user info", LogLevel.ERROR)
+            return 1
+        
+        # Afficher les informations
+        table = Table(title="Your Account")
+        table.add_column("Property", style="cyan")
+        table.add_column("Value", style="green")
+        
+        table.add_row("Username", user_info.get('username', 'Unknown'))
+        table.add_row("Email", user_info.get('email', 'Not provided'))
+        table.add_row("Packages", str(user_info.get('package_count', 0)))
+        table.add_row("Member since", user_info.get('created_at', 'Unknown'))
+        table.add_row("Last login", user_info.get('last_login', 'Never'))
+        
+        self.console.print(table)
+        
+        # Afficher les packages récents
+        packages = self.hub.list_user_packages()
+        if packages:
+            self.console.print("\n[bold]Recent Packages:[/]")
+            for pkg in packages[:5]:
+                self.console.print(f"  • {pkg.get('name')} v{pkg.get('version')} ({pkg.get('downloads', 0)} downloads)")
+        
+        self._print_footer()
+        return 0
     
     def _cmd_version(self):
         """Afficher la version"""
@@ -1878,13 +2661,14 @@ file = LICENSE*
         
         self.console.print(info_table)
         
-        # Afficher des infos de configuration
+        # Informations de configuration
         config_stats = Table(title="Configuration")
         config_stats.add_column("Parameter", style="cyan")
         config_stats.add_column("Value", style="green")
         
         config_stats.add_row("Theme", self.config_manager.get("ui.theme", "dark"))
-        config_stats.add_row("Total Parameters", f"{len(self.config_manager.params):,}")
+        config_stats.add_row("Config Parameters", f"{len(self.config_manager.params):,}")
+        config_stats.add_row("Hub URL", self.config_manager.get("network.hub_url", "Not set"))
         config_stats.add_row("Config File", str(self.config_manager.config_file))
         
         self.console.print(config_stats)
@@ -2004,6 +2788,12 @@ file = LICENSE*
         else:
             checks.append(("✗", "Configuration", f"{len(config_errors)} errors", LogLevel.ERROR))
         
+        # Vérifier Zenv Hub
+        if self.hub.check_status():
+            checks.append(("✓", "Zenv Hub", "Online", LogLevel.SUCCESS))
+        else:
+            checks.append(("⚠", "Zenv Hub", "Offline", LogLevel.WARNING))
+        
         # Afficher les résultats
         table = Table(title="System Diagnostics")
         table.add_column("Status", style="cyan")
@@ -2107,7 +2897,8 @@ description = README.md
             f"[bold]Next steps:[/]\n"
             f"  1. [green]cd {name}[/]\n"
             f"  2. [green]zenv run src/main.zv[/]\n"
-            f"  3. [green]zenv build[/] to create package",
+            f"  3. [green]zenv build[/] to create package\n"
+            f"  4. [green]zenv hub publish[/] to share",
             title="Project Initialized",
             border_style="green"
         ))
@@ -2116,72 +2907,43 @@ description = README.md
         return 0
     
     # Implémentations des autres méthodes
+    def _cmd_pkg(self, parsed):
+        """Gestion des packages"""
+        if parsed.pkg_command == "install":
+            return self._install_package(parsed.package, getattr(parsed, 'version', None), getattr(parsed, 'force', False))
+        elif parsed.pkg_command == "list":
+            return self._list_packages(getattr(parsed, 'local', False), getattr(parsed, 'global_scope', False))
+        elif parsed.pkg_command == "remove":
+            return self._remove_package(parsed.package, getattr(parsed, 'purge', False))
+        elif parsed.pkg_command == "update":
+            return self._update_package(parsed.package, getattr(parsed, 'prerelease', False))
+        elif parsed.pkg_command == "info":
+            return self._package_info(parsed.package)
+        else:
+            self._log(f"Unknown pkg command: {parsed.pkg_command}", LogLevel.ERROR)
+            return 1
+    
     def _install_package(self, package: str, version: Optional[str], force: bool) -> int:
+        """Installer un package"""
         self._log(f"Installing {package}...", LogLevel.INFO)
         return 0
     
     def _list_packages(self, local: bool, global_scope: bool) -> int:
+        """Lister les packages"""
         self._log("Listing packages...", LogLevel.INFO)
         return 0
     
     def _remove_package(self, package: str, purge: bool) -> int:
+        """Supprimer un package"""
         self._log(f"Removing {package}...", LogLevel.WARNING)
         return 0
     
     def _update_package(self, package: str, prerelease: bool) -> int:
+        """Mettre à jour un package"""
         self._log(f"Updating {package}...", LogLevel.INFO)
         return 0
     
     def _package_info(self, package: str) -> int:
+        """Afficher les infos d'un package"""
         self._log(f"Package info for {package}...", LogLevel.INFO)
-        return 0
-    
-    def _hub_status(self) -> int:
-        if self.hub.check_status():
-            self._log("Zenv Hub: Online", LogLevel.SUCCESS)
-        else:
-            self._log("Zenv Hub: Offline", LogLevel.ERROR)
-        return 0
-    
-    def _hub_login(self, token: str) -> int:
-        if self.hub.login(token):
-            self._log("Logged in to Zenv Hub", LogLevel.SUCCESS)
-        else:
-            self._log("Login failed", LogLevel.ERROR)
-        return 0
-    
-    def _hub_logout(self) -> int:
-        self.hub.logout()
-        self._log("Logged out", LogLevel.SUCCESS)
-        return 0
-    
-    def _hub_search(self, query: str) -> int:
-        results = self.hub.search_packages(query)
-        if results:
-            table = Table(title=f"Search Results for '{query}'")
-            table.add_column("Name", style="cyan")
-            table.add_column("Version", style="green")
-            table.add_column("Author", style="yellow")
-            table.add_column("Description")
-            
-            for pkg in results[:20]:
-                table.add_row(
-                    pkg.get('name', ''),
-                    pkg.get('version', ''),
-                    pkg.get('author', ''),
-                    pkg.get('description', '')[:60]
-                )
-            
-            self.console.print(table)
-        else:
-            self._log(f"No packages found for '{query}'", LogLevel.INFO)
-        
-        return 0
-    
-    def _publish_package(self, package_file: str) -> int:
-        self._log(f"Publishing {package_file}...", LogLevel.INFO)
-        return 0
-    
-    def _hub_whoami(self) -> int:
-        self._log("Hub user info...", LogLevel.INFO)
         return 0
