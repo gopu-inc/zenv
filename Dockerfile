@@ -13,7 +13,6 @@ RUN apt-get update && \
 COPY . .
 
 # Installer les dépendances Python
-RUN pip3 install --no-cache-dir -r requirements.txt
 RUN pip3 install -e .
 # Labels pour branding et traçabilité
 LABEL org.opencontainers.image.title="ZENV"
