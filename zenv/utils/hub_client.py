@@ -2,8 +2,6 @@ import requests
 import json
 import os
 import time
-import subprocess
-import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 import tempfile
@@ -70,7 +68,7 @@ class ZenvHubClient:
             response = requests.get(
                 f"{self.base_url}/api/packages",
                 headers=self._get_headers(),
-                timeout=200
+                timeout=15
             )
             
             if response.status_code == 200:
@@ -201,130 +199,3 @@ class ZenvHubClient:
         except Exception as e:
             print(f"❌ Download error: {e}")
             return None
-
-    def install_package(self, package_name: str, version: str = "latest") -> bool:
-        """
-        Install a package from Zenv Hub
-        """
-        try:
-            # Télécharger le package
-            package_data = self.download_package(package_name, version)
-            if not package_data:
-                return False
-            
-            # Extraire le package dans un répertoire temporaire
-            import tarfile
-            import gzip
-            
-            with tempfile.TemporaryDirectory() as tmpdir:
-                # Écrire les données compressées
-                compressed_file = os.path.join(tmpdir, f"{package_name}.tar.gz")
-                with open(compressed_file, 'wb') as f:
-                    f.write(package_data)
-                
-                # Extraire
-                with gzip.open(compressed_file, 'rb') as f_gz:
-                    with tarfile.open(fileobj=f_gz, mode='r') as tar:
-                        tar.extractall(tmpdir)
-                
-                # Chercher le dossier extrait
-                extracted_dir = None
-                for item in os.listdir(tmpdir):
-                    item_path = os.path.join(tmpdir, item)
-                    if os.path.isdir(item_path) and item.startswith(package_name):
-                        extracted_dir = item_path
-                        break
-                
-                if not extracted_dir:
-                    print(f"❌ Could not find extracted package directory")
-                    return False
-                
-                # Vérifier s'il y a un setup.py ou pyproject.toml
-                setup_py = os.path.join(extracted_dir, 'setup.py')
-                pyproject_toml = os.path.join(extracted_dir, 'pyproject.toml')
-                
-                has_entry_points = False
-                
-                # Vérifier setup.py
-                if os.path.exists(setup_py):
-                    with open(setup_py, 'r') as f:
-                        setup_content = f.read()
-                        if 'entry_points' in setup_content or 'console_scripts' in setup_content:
-                            has_entry_points = True
-                
-                # Vérifier pyproject.toml
-                if os.path.exists(pyproject_toml):
-                    with open(pyproject_toml, 'r') as f:
-                        pyproject_content = f.read()
-                        if 'entry_points' in pyproject_content or 'console_scripts' in pyproject_content or '[project.scripts]' in pyproject_content:
-                            has_entry_points = True
-                
-                # Afficher le message de build
-                print(f"build for Pack: {package_name}")
-                
-                # Installer avec pip install -e si entry points détectés
-                if has_entry_points:
-                    print(f"⚠️  Package {package_name} has entry points, installing with zenv --build --a {package_name} --netwell --toolstack --ej \ as bin/--get")
-                    
-                    # Créer le répertoire d'installation
-                    install_dir = f"/usr/bin/zenv-site/c82/{package_name}"
-                    os.makedirs(os.path.dirname(install_dir), exist_ok=True)
-                    
-                    # Copier les fichiers du package
-                    import shutil
-                    if os.path.exists(install_dir):
-                        shutil.rmtree(install_dir)
-                    shutil.copytree(extracted_dir, install_dir)
-                    
-                    # Installer avec pip install -e
-                    print(f"Executing: pip install -e {install_dir}")
-                    result = subprocess.run(
-                        [sys.executable, "-m", "pip", "install", "-e", install_dir],
-                        capture_output=True,
-                        text=True
-                    )
-                    
-                    if result.returncode == 0:
-                        print(f"✅ Package {package_name} installed successfully with entry points")
-                        print(result.stdout)
-                    else:
-                        print(f"❌ Failed to install package {package_name}")
-                        print(result.stderr)
-                        return False
-                else:
-                    # Installation normale
-                    print(f"📦 Package {package_name} has no entry points, installing normally")
-                    
-                    # Créer le répertoire d'installation
-                    install_dir = f"/usr/bin/zenv-site/c82/{package_name}"
-                    os.makedirs(os.path.dirname(install_dir), exist_ok=True)
-                    
-                    # Copier les fichiers du package
-                    import shutil
-                    if os.path.exists(install_dir):
-                        shutil.rmtree(install_dir)
-                    shutil.copytree(extracted_dir, install_dir)
-                    
-                    # Installer avec pip install
-                    print(f"Executing: pip install {install_dir}")
-                    result = subprocess.run(
-                        [sys.executable, "-m", "pip", "install", install_dir],
-                        capture_output=True,
-                        text=True
-                    )
-                    
-                    if result.returncode == 0:
-                        print(f"✅ Package {package_name} installed successfully")
-                        print(result.stdout)
-                    else:
-                        print(f"❌ Failed to install package {package_name}")
-                        print(result.stderr)
-                        return False
-                
-                return True
-                    
-        except Exception as e:
-            print(f"❌ Installation error: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
