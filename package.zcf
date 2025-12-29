@@ -1,42 +1,61 @@
 # Zenv Configuration File - Manifeste du package
 [Zenv]
-name = mon-package-zenv
+name = zenv-core
 version = 1.0.0
 author = Votre Nom
-description = Un package Zenv fantastique
+description = Core package for Zenv package manager
 license = MIT
+namespace = gopu-inc
 
 [File-build]
 main = src/main.zv
 include = 
-    src/**/*.zv
-    src/**/*.py
+    src/
     README.md
     LICENSE
+    package.zcf
+    bin/
 exclude =
     tests/
     __pycache__/
+    *.tmp
+    .git/
 
 [Dep.zv]
-# Dépendances Zenv (installées depuis zenv-hub)
-requests = 1.0.0
+# Dépendances Zenv
+zenv-utils = 1.2.0
 zenv-web = latest
-zenv-db = 2.1.0
 
 [Dep.py]
-# Dépendances Python (installées depuis PyPI)
-flask = 2.0.0
-numpy = >=1.24.0
-pandas = latest
+# Dépendances Python
+requests = >=2.28.0
+flask = 2.3.0
 
 [Docs]
 description = README.md
 changelog = CHANGELOG.md
 license = LICENSE
 
+[entrypoint]
+zenv = src/main.zv
+zenv-cli = bin/cli.zv
+zenv-install = bin/install.zv
+
 [Build]
-type = zenv  # zenv ou python
+type = zenv
 entry_point = src/main.zv
-output = dist/{name}-{version}.zcf.gs
+output = dist/{name}-{version}.zv
 compression = gzip
 optimize = true
+sign = false
+
+[Install]
+target = $HOME/.zenv/packages/{name}-{version}
+bin_path = $HOME/.zenv/bin
+lib_path = $HOME/.zenv/lib
+config_path = $HOME/.zenv/config
+
+[Metadata]
+uuid = {auto-generate}
+created = {timestamp}
+hash = {sha256}
