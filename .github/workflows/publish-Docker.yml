@@ -15,11 +15,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Connexion à Docker Hub avec le token secret
+      # 2. Connexion à Docker Hub avec username + token
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ github.repository_owner }}
+          username: ceoseshell
           password: ${{ secrets.DOCKER_TOKEN }}
 
       # 3. Build de l’image ZENV
@@ -27,11 +27,11 @@ jobs:
         run: |
           docker build \
             --build-arg VERSION=${{ github.sha }} \
-            -t ${{ github.repository_owner }}/zenv:latest \
-            -t ${{ github.repository_owner }}/zenv:${{ github.run_number }} .
+            -t ceoseshell/zenv:latest \
+            -t ceoseshell/zenv:${{ github.run_number }} .
 
       # 4. Push vers Docker Hub
       - name: Push Docker image
         run: |
-          docker push ${{ github.repository_owner }}/zenv:latest
-          docker push ${{ github.repository_owner }}/zenv:${{ github.run_number }}
+          docker push ceoseshell/zenv:latest
+          docker push ceoseshell/zenv:${{ github.run_number }}
