@@ -3,436 +3,1294 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🚀 Zenv Package Hub</title>
+    <title>🚀 Zenv Package Hub - Interface Complète</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
     <style>
+        /* Variables CSS */
+        :root {
+            --primary: #0066ff;
+            --secondary: #6c757d;
+            --success: #28a745;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --info: #17a2b8;
+            --light: #f8f9fa;
+            --dark: #343a40;
+            --white: #ffffff;
+            --gray: #6c757d;
+            --gray-light: #e9ecef;
+            --border-radius: 8px;
+            --box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            --transition: all 0.3s ease;
+        }
+
+        /* Reset & Base */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
             line-height: 1.6;
-            color: #333;
+            color: var(--dark);
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
+        }
+
+        /* Layout */
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
             padding: 20px;
         }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        
-        .hero {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            padding: 3rem;
-            text-align: center;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+
+        /* Header */
+        .header {
+            background: var(--white);
+            border-radius: var(--border-radius);
+            padding: 2rem;
             margin-bottom: 2rem;
-            margin-top: 2rem;
+            box-shadow: var(--box-shadow);
+            text-align: center;
         }
-        
-        h1 {
-            font-size: 3.5rem;
-            margin-bottom: 1rem;
-            color: #2d3748;
+
+        .header h1 {
+            font-size: 3rem;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 1rem;
         }
-        
+
         .subtitle {
-            font-size: 1.5rem;
-            color: #4a5568;
+            font-size: 1.2rem;
+            color: var(--gray);
+            margin-bottom: 1.5rem;
+        }
+
+        /* Tabs Navigation */
+        .tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            background: var(--white);
+            padding: 1rem;
+            border-radius: var(--border-radius);
             margin-bottom: 2rem;
+            box-shadow: var(--box-shadow);
         }
-        
-        .server-info {
-            background: #f7fafc;
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin: 2rem auto;
-            max-width: 800px;
-            border-left: 4px solid #4299e1;
-        }
-        
-        .info-item {
-            margin: 0.5rem 0;
-            font-family: 'Courier New', monospace;
-            font-size: 1.1rem;
-        }
-        
-        .features {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            margin: 3rem 0;
-        }
-        
-        .feature-card {
-            background: white;
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-        
-        .feature-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
-        }
-        
-        .feature-icon {
-            font-size: 2.5rem;
-            color: #4299e1;
-            margin-bottom: 1rem;
-        }
-        
-        .feature-card h3 {
-            color: #2d3748;
-            margin-bottom: 1rem;
-        }
-        
-        .feature-card ul {
-            list-style: none;
-            padding: 0;
-        }
-        
-        .feature-card li {
-            padding: 0.5rem 0;
-            color: #4a5568;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        
-        .feature-card li:before {
-            content: "✓";
-            color: #48bb78;
-            margin-right: 0.5rem;
-            font-weight: bold;
-        }
-        
-        .stats {
-            display: flex;
-            justify-content: center;
-            gap: 3rem;
-            margin: 3rem 0;
-            flex-wrap: wrap;
-        }
-        
-        .stat {
-            text-align: center;
-            background: white;
-            padding: 2rem;
-            border-radius: 12px;
-            min-width: 150px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-        }
-        
-        .stat-number {
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: #4299e1;
-            margin-bottom: 0.5rem;
-        }
-        
-        .stat-label {
-            color: #718096;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
-        .navigation {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-            margin: 3rem 0;
-            flex-wrap: wrap;
-        }
-        
-        .btn {
-            padding: 1rem 2rem;
-            background: #4299e1;
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
+
+        .tab-btn {
+            padding: 0.75rem 1.5rem;
+            background: var(--gray-light);
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
             font-weight: 600;
-            transition: background 0.3s ease;
+            transition: var(--transition);
             display: flex;
             align-items: center;
             gap: 0.5rem;
         }
-        
-        .btn:hover {
-            background: #3182ce;
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: var(--white);
         }
-        
-        .btn-secondary {
-            background: #718096;
+
+        .tab-btn:hover:not(.active) {
+            background: var(--gray);
+            color: var(--white);
         }
-        
-        .btn-secondary:hover {
-            background: #4a5568;
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
         }
-        
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Cards */
+        .card {
+            background: var(--white);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--box-shadow);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--gray-light);
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            color: var(--dark);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Grids */
+        .grid {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .grid-2 { grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); }
+        .grid-3 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+        .grid-4 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+
+        /* Status */
         .status {
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .status.connected {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .status.warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+
+        /* Package Cards */
+        .package-card {
+            border: 1px solid var(--gray-light);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            transition: var(--transition);
+        }
+
+        .package-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        }
+
+        .package-header {
+            background: var(--primary);
+            color: var(--white);
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .package-name {
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .package-version {
+            background: rgba(255,255,255,0.2);
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        .package-body {
+            padding: 1.5rem;
+        }
+
+        .package-description {
+            color: var(--gray);
+            margin-bottom: 1rem;
+            line-height: 1.5;
+        }
+
+        .package-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+            color: var(--gray);
+        }
+
+        .package-meta span {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .package-footer {
+            padding: 1rem 1.5rem;
+            background: var(--light);
+            border-top: 1px solid var(--gray-light);
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-weight: 600;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: var(--white);
+        }
+
+        .btn-primary:hover {
+            background: #0056cc;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: var(--white);
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: var(--white);
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--gray-light);
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            transition: var(--transition);
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .form-text {
+            font-size: 0.85rem;
+            color: var(--gray);
+            margin-top: 0.25rem;
+        }
+
+        /* Badge Generator */
+        .badge-preview {
             text-align: center;
             padding: 2rem;
-            margin: 2rem auto;
-            max-width: 600px;
-            border-radius: 12px;
-            background: #f0fff4;
-            border: 2px solid #48bb78;
-            color: #276749;
+            background: var(--light);
+            border-radius: var(--border-radius);
+            margin: 1rem 0;
         }
-        
-        .error {
-            background: #fff5f5;
-            border-color: #fc8181;
-            color: #c53030;
+
+        .badge-code {
+            background: #2d2d2d;
+            color: var(--white);
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            margin: 1rem 0;
         }
-        
-        footer {
+
+        /* Stats */
+        .stats {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            margin: 2rem 0;
+        }
+
+        .stat {
+            text-align: center;
+            background: var(--white);
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            min-width: 150px;
+            box-shadow: var(--box-shadow);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: var(--gray);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Login Form */
+        .login-form {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--gray);
+        }
+
+        .loading i {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Footer */
+        .footer {
             text-align: center;
             padding: 2rem;
-            color: white;
+            color: var(--white);
             margin-top: 3rem;
         }
-        
+
+        /* Responsive */
         @media (max-width: 768px) {
-            h1 {
-                font-size: 2.5rem;
+            .app-container {
+                padding: 10px;
             }
-            
-            .hero {
-                padding: 2rem;
-                margin: 1rem;
+
+            .header h1 {
+                font-size: 2rem;
             }
-            
-            .features {
+
+            .tabs {
+                flex-direction: column;
+            }
+
+            .grid-2, .grid-3, .grid-4 {
                 grid-template-columns: 1fr;
             }
-            
+
             .stats {
-                gap: 1rem;
+                flex-direction: column;
+                align-items: center;
             }
-            
+
             .stat {
-                min-width: 120px;
-                padding: 1.5rem;
+                width: 100%;
+                max-width: 250px;
             }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--gray-light);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #0056cc;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="hero">
-            <h1>
-                <i class="fas fa-rocket"></i>
-                Zenv Package Hub
-            </h1>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <h1><i class="fas fa-rocket"></i> Zenv Package Hub</h1>
+            <p class="subtitle">Interface complète pour l'API Zenv Hub (v2.1.0)</p>
             
-            <p class="subtitle">
-                Gestionnaire de packages Zenv avec dépôt privé et accès public
-            </p>
-            
-            <div class="server-info">
-                <div class="info-item">
-                    <strong>API URL:</strong> https://zenv-hub.onrender.com
+            <div id="server-status" class="status warning">
+                <i class="fas fa-sync fa-spin"></i>
+                <span>Connexion au serveur en cours...</span>
+            </div>
+
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-number" id="packages-count">0</div>
+                    <div class="stat-label">Packages</div>
                 </div>
-                <div class="info-item">
-                    <strong>Version:</strong> 2.1.0
+                <div class="stat">
+                    <div class="stat-number" id="badges-count">0</div>
+                    <div class="stat-label">Badges</div>
                 </div>
-                <div class="info-item">
-                    <strong>Mode:</strong> Dépôt privé, fichiers publics
+                <div class="stat">
+                    <div class="stat-number" id="api-version">2.1.0</div>
+                    <div class="stat-label">API Version</div>
                 </div>
             </div>
-            
-            <div id="server-status" class="status">
-                <p><i class="fas fa-sync fa-spin"></i> Vérification de la connexion...</p>
-            </div>
-        </div>
-        
-        <div class="stats">
-            <div class="stat">
-                <div class="stat-number" id="package-count">0</div>
-                <div class="stat-label">Packages</div>
-            </div>
-            <div class="stat">
-                <div class="stat-number" id="badge-count">0</div>
-                <div class="stat-label">Badges</div>
-            </div>
-            <div class="stat">
-                <div class="stat-number">2.1.0</div>
-                <div class="stat-label">API Version</div>
-            </div>
-        </div>
-        
-        <div class="features">
-            <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="fas fa-box"></i>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="tabs">
+            <button class="tab-btn active" onclick="showTab('dashboard')">
+                <i class="fas fa-home"></i> Dashboard
+            </button>
+            <button class="tab-btn" onclick="showTab('packages')">
+                <i class="fas fa-box"></i> Packages
+            </button>
+            <button class="tab-btn" onclick="showTab('badges')">
+                <i class="fas fa-shield-alt"></i> Badges
+            </button>
+            <button class="tab-btn" onclick="showTab('upload')">
+                <i class="fas fa-upload"></i> Upload
+            </button>
+            <button class="tab-btn" onclick="showTab('badge-generator')">
+                <i class="fas fa-paint-brush"></i> Badge Generator
+            </button>
+            <button class="tab-btn" onclick="showTab('api-docs')">
+                <i class="fas fa-code"></i> API Docs
+            </button>
+            <button class="tab-btn" onclick="showTab('login')">
+                <i class="fas fa-sign-in-alt"></i> Login
+            </button>
+        </nav>
+
+        <!-- Tab Contents -->
+        <main>
+            <!-- Dashboard -->
+            <div id="dashboard" class="tab-content active">
+                <div class="grid grid-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-server"></i> Serveur Status</h3>
+                        </div>
+                        <div id="server-details"></div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-fire"></i> Packages Récents</h3>
+                        </div>
+                        <div id="recent-packages"></div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-star"></i> Badges Populaires</h3>
+                        </div>
+                        <div id="popular-badges"></div>
+                    </div>
                 </div>
-                <h3>Gestion des Packages</h3>
-                <ul>
-                    <li>Upload de packages .zv</li>
-                    <li>Téléchargement public</li>
-                    <li>Documentation automatique</li>
-                    <li>Gestion des versions</li>
-                </ul>
-            </div>
-            
-            <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="fas fa-shield-alt"></i>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-bolt"></i> Actions Rapides</h3>
+                    </div>
+                    <div class="grid grid-4">
+                        <button class="btn btn-primary" onclick="showTab('packages')">
+                            <i class="fas fa-list"></i> Voir Tous les Packages
+                        </button>
+                        <button class="btn btn-success" onclick="showTab('upload')">
+                            <i class="fas fa-upload"></i> Uploader un Package
+                        </button>
+                        <button class="btn btn-primary" onclick="showTab('badge-generator')">
+                            <i class="fas fa-magic"></i> Créer un Badge
+                        </button>
+                        <a href="https://zenv-hub.onrender.com/api" target="_blank" class="btn btn-secondary">
+                            <i class="fas fa-external-link-alt"></i> API Documentation
+                        </a>
+                    </div>
                 </div>
-                <h3>Système de Badges</h3>
-                <ul>
-                    <li>Badges SVG personnalisés</li>
-                    <li>Support logos intégrés</li>
-                    <li>Format shields.io</li>
-                    <li>Atelier de création</li>
-                </ul>
             </div>
-            
-            <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="fas fa-lock"></i>
+
+            <!-- Packages -->
+            <div id="packages" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-boxes"></i> Tous les Packages</h3>
+                        <div>
+                            <input type="text" id="package-search" class="form-control" placeholder="Rechercher un package..." style="width: 300px;">
+                        </div>
+                    </div>
+                    <div id="all-packages" class="loading">
+                        <p><i class="fas fa-spinner fa-spin"></i> Chargement des packages...</p>
+                    </div>
                 </div>
-                <h3>Sécurité</h3>
-                <ul>
-                    <li>Tokens zenv_*</li>
-                    <li>Authentification JWT</li>
-                    <li>Rôles utilisateurs</li>
-                    <li>API sécurisée</li>
-                </ul>
             </div>
-        </div>
-        
-        <div class="navigation">
-            <a href="https://zenv-hub.onrender.com/api/packages" target="_blank" class="btn">
-                <i class="fas fa-box-open"></i>
-                Explorer les Packages
-            </a>
-            <a href="https://zenv-hub.onrender.com/api/badges" target="_blank" class="btn btn-secondary">
-                <i class="fas fa-shield-alt"></i>
-                Voir les Badges
-            </a>
-            <a href="https://zenv-hub.onrender.com/api/version" target="_blank" class="btn">
-                <i class="fas fa-code"></i>
-                API Documentation
-            </a>
-        </div>
-        
-        <div id="recent-packages" style="background: white; padding: 2rem; border-radius: 12px; margin: 2rem 0;">
-            <h2 style="text-align: center; margin-bottom: 2rem; color: #2d3748;">
-                <i class="fas fa-fire"></i> Derniers Packages
-            </h2>
-            <div id="packages-list" style="text-align: center;">
-                <p><i class="fas fa-spinner fa-spin"></i> Chargement des packages...</p>
+
+            <!-- Badges -->
+            <div id="badges" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-shield-alt"></i> Galerie de Badges</h3>
+                    </div>
+                    <div id="badges-gallery" class="loading">
+                        <p><i class="fas fa-spinner fa-spin"></i> Chargement des badges...</p>
+                    </div>
+                </div>
             </div>
-        </div>
+
+            <!-- Upload -->
+            <div id="upload" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-upload"></i> Uploader un Package</h3>
+                    </div>
+                    <div class="grid grid-2">
+                        <div>
+                            <form id="upload-form">
+                                <div class="form-group">
+                                    <label class="form-label">Nom du Package</label>
+                                    <input type="text" class="form-control" id="package-name" required placeholder="ex: my-package">
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Version</label>
+                                    <input type="text" class="form-control" id="package-version" required placeholder="ex: 1.0.0">
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Description</label>
+                                    <textarea class="form-control" id="package-description" rows="3" placeholder="Description du package"></textarea>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Licence</label>
+                                    <select class="form-control" id="package-license">
+                                        <option value="MIT">MIT</option>
+                                        <option value="Apache-2.0">Apache 2.0</option>
+                                        <option value="GPL-3.0">GPL v3</option>
+                                        <option value="BSD-3-Clause">BSD 3-Clause</option>
+                                        <option value="ISC">ISC</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Fichier Package (.zv)</label>
+                                    <input type="file" class="form-control" id="package-file" accept=".zv" required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">README (optionnel)</label>
+                                    <input type="file" class="form-control" id="readme-file" accept=".md,.txt">
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">LICENSE (optionnel)</label>
+                                    <input type="file" class="form-control" id="license-file" accept=".txt">
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Token d'authentification</label>
+                                    <input type="text" class="form-control" id="upload-token" placeholder="zenv_..." required>
+                                    <p class="form-text">Obtenez un token via l'API /api/auth/login</p>
+                                </div>
+
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-upload"></i> Uploader le Package
+                                </button>
+                            </form>
+                        </div>
+
+                        <div>
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title"><i class="fas fa-info-circle"></i> Instructions</h3>
+                                </div>
+                                <div>
+                                    <h4>Format du package:</h4>
+                                    <ul style="list-style: none; padding: 0;">
+                                        <li><i class="fas fa-check text-success"></i> Extension: .zv</li>
+                                        <li><i class="fas fa-check text-success"></i> Nom: nom-version.zv</li>
+                                        <li><i class="fas fa-check text-success"></i> Taille max: 100MB</li>
+                                    </ul>
+
+                                    <h4>Endpoint API:</h4>
+                                    <code>POST /api/packages/upload</code>
+
+                                    <h4>Headers requis:</h4>
+                                    <pre style="background: #f8f9fa; padding: 1rem; border-radius: 5px;">
+Authorization: Token zenv_...
+Content-Type: multipart/form-data</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Badge Generator -->
+            <div id="badge-generator" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-paint-brush"></i> Générateur de Badges</h3>
+                    </div>
+                    <div class="grid grid-2">
+                        <div>
+                            <form id="badge-form">
+                                <div class="form-group">
+                                    <label class="form-label">Label (gauche)</label>
+                                    <input type="text" class="form-control" id="badge-label" value="Zenv" required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Valeur (droite)</label>
+                                    <input type="text" class="form-control" id="badge-value" value="2.1.0" required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Couleur</label>
+                                    <select class="form-control" id="badge-color">
+                                        <option value="blue">Bleu</option>
+                                        <option value="green">Vert</option>
+                                        <option value="red">Rouge</option>
+                                        <option value="orange">Orange</option>
+                                        <option value="yellow">Jaune</option>
+                                        <option value="purple">Violet</option>
+                                        <option value="gray">Gris</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Logo (optionnel)</label>
+                                    <input type="text" class="form-control" id="badge-logo" placeholder="github, python, docker...">
+                                    <p class="form-text">Noms supportés: github, gitlab, python, docker, etc.</p>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-magic"></i> Générer le Badge
+                                </button>
+                            </form>
+                        </div>
+
+                        <div>
+                            <div class="badge-preview">
+                                <h4>Prévisualisation</h4>
+                                <div id="badge-preview-image">
+                                    <img src="https://zenv-hub.onrender.com/badge/custom/Zenv/2.1.0/blue" alt="Badge preview">
+                                </div>
+                            </div>
+
+                            <div class="badge-code">
+                                <h4>Code Markdown:</h4>
+                                <pre id="badge-markdown">![Zenv: 2.1.0](https://zenv-hub.onrender.com/badge/custom/Zenv/2.1.0/blue)</pre>
+                                <button onclick="copyBadgeCode()" class="btn btn-sm btn-secondary">
+                                    <i class="far fa-copy"></i> Copier
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- API Documentation -->
+            <div id="api-docs" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-code"></i> Documentation API</h3>
+                    </div>
+                    <div class="grid grid-2">
+                        <div>
+                            <h4>Endpoints Publics:</h4>
+                            <div class="api-endpoint">
+                                <code>GET /api/packages</code>
+                                <p>Lister tous les packages</p>
+                            </div>
+                            <div class="api-endpoint">
+                                <code>GET /api/packages/download/&lt;name&gt;/&lt;version&gt;</code>
+                                <p>Télécharger un package</p>
+                            </div>
+                            <div class="api-endpoint">
+                                <code>GET /api/badges</code>
+                                <p>Lister tous les badges</p>
+                            </div>
+                            <div class="api-endpoint">
+                                <code>GET /badge/svg/&lt;name&gt;</code>
+                                <p>Obtenir un badge SVG</p>
+                            </div>
+                            <div class="api-endpoint">
+                                <code>GET /api/health</code>
+                                <p>Vérifier le statut du serveur</p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4>Endpoints Privés (Token requis):</h4>
+                            <div class="api-endpoint">
+                                <code>POST /api/packages/upload</code>
+                                <p>Uploader un package</p>
+                            </div>
+                            <div class="api-endpoint">
+                                <code>POST /api/badges</code>
+                                <p>Créer un badge</p>
+                            </div>
+                            <div class="api-endpoint">
+                                <code>POST /api/auth/login</code>
+                                <p>Authentification</p>
+                            </div>
+                            <div class="api-endpoint">
+                                <code>POST /api/auth/register</code>
+                                <p>Créer un compte</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="margin-top: 2rem;">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-terminal"></i> Exemple avec cURL</h3>
+                        </div>
+                        <pre style="background: #2d2d2d; color: white; padding: 1rem; border-radius: 5px; overflow-x: auto;">
+# Lister les packages
+curl https://zenv-hub.onrender.com/api/packages
+
+# Télécharger un package
+curl -O https://zenv-hub.onrender.com/api/packages/download/my-package/1.0.0
+
+# Créer un badge
+curl -X POST https://zenv-hub.onrender.com/api/badges \
+  -H "Authorization: Token zenv_..." \
+  -H "Content-Type: application/json" \
+  -d '{"name":"version","label":"Version","value":"1.0.0","color":"blue"}'</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Login -->
+            <div id="login" class="tab-content">
+                <div class="card" style="max-width: 500px; margin: 0 auto;">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-sign-in-alt"></i> Authentification</h3>
+                    </div>
+                    <form id="login-form">
+                        <div class="form-group">
+                            <label class="form-label">Nom d'utilisateur</label>
+                            <input type="text" class="form-control" id="login-username" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Mot de passe</label>
+                            <input type="password" class="form-control" id="login-password" required>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">
+                            <i class="fas fa-sign-in-alt"></i> Se connecter
+                        </button>
+                    </form>
+
+                    <div style="text-align: center; margin-top: 1rem;">
+                        <p>Pas de compte? <a href="#" onclick="showTab('register')">S'inscrire</a></p>
+                    </div>
+                </div>
+
+                <div id="register" class="tab-content">
+                    <div class="card" style="max-width: 500px; margin: 2rem auto 0;">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-user-plus"></i> Créer un compte</h3>
+                        </div>
+                        <form id="register-form">
+                            <div class="form-group">
+                                <label class="form-label">Nom d'utilisateur</label>
+                                <input type="text" class="form-control" id="register-username" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Email</label>
+                                <input type="email" class="form-control" id="register-email" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Mot de passe</label>
+                                <input type="password" class="form-control" id="register-password" required minlength="8">
+                                <p class="form-text">Minimum 8 caractères</p>
+                            </div>
+
+                            <button type="submit" class="btn btn-success" style="width: 100%;">
+                                <i class="fas fa-user-plus"></i> S'inscrire
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Zenv Package Hub © 2024 | API Version: 2.1.0</p>
+            <p>Connecté à: https://zenv-hub.onrender.com | Déployé sur GitHub Pages</p>
+        </footer>
     </div>
-    
-    <footer>
-        <p>Zenv Package Hub © 2024 | Connecté à votre API Zenv Hub</p>
-        <p>Déployé sur GitHub Pages | CI/CD Automatique</p>
-    </footer>
-    
+
+    <!-- JavaScript Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.5.0/axios.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+
     <script>
         // Configuration
         const API_URL = 'https://zenv-hub.onrender.com';
-        
-        // Charger le statut du serveur
-        async function loadServerStatus() {
+        let currentUser = null;
+        let allPackages = [];
+        let allBadges = [];
+
+        // Toastr Configuration
+        toastr.options = {
+            "closeButton": true,
+            "progressBar": true,
+            "positionClass": "toast-top-right",
+            "timeOut": "3000"
+        };
+
+        // Tab Management
+        function showTab(tabId) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabId).classList.add('active');
+            
+            // Activate corresponding button
+            document.querySelector(`.tab-btn[onclick="showTab('${tabId}')"]`).classList.add('active');
+            
+            // Load data if needed
+            if (tabId === 'packages') {
+                loadAllPackages();
+            } else if (tabId === 'badges') {
+                loadAllBadges();
+            }
+        }
+
+        // Server Status
+        async function checkServerStatus() {
             try {
-                const response = await fetch(`${API_URL}/api/health`);
-                const data = await response.json();
+                const response = await axios.get(`${API_URL}/api/health`);
+                const data = response.data;
                 
                 const statusDiv = document.getElementById('server-status');
-                if (data.status === 'ok') {
-                    statusDiv.innerHTML = `
-                        <p><i class="fas fa-check-circle"></i> <strong>Serveur connecté</strong></p>
-                        <p>GitHub: ${data.github} | Dernière vérification: ${new Date().toLocaleTimeString()}</p>
-                    `;
-                } else {
-                    statusDiv.className = 'status error';
-                    statusDiv.innerHTML = `<p><i class="fas fa-exclamation-circle"></i> <strong>Problème de connexion</strong></p>`;
-                }
+                statusDiv.className = 'status connected';
+                statusDiv.innerHTML = `
+                    <i class="fas fa-check-circle"></i>
+                    <span><strong>Serveur connecté</strong> | GitHub: ${data.github} | Version: ${data.api_version || '2.1.0'}</span>
+                `;
+                
+                document.getElementById('server-details').innerHTML = `
+                    <p><strong>Status:</strong> ${data.status}</p>
+                    <p><strong>GitHub:</strong> ${data.github}</p>
+                    <p><strong>Timestamp:</strong> ${new Date(data.timestamp).toLocaleString()}</p>
+                    <p><strong>Version API:</strong> ${data.api_version || '2.1.0'}</p>
+                `;
+                
+                return true;
             } catch (error) {
                 const statusDiv = document.getElementById('server-status');
                 statusDiv.className = 'status error';
                 statusDiv.innerHTML = `
-                    <p><i class="fas fa-exclamation-triangle"></i> <strong>Impossible de contacter le serveur</strong></p>
-                    <p>Vérifiez que l'API Zenv Hub est en cours d'exécution</p>
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span><strong>Serveur inaccessible</strong> | Vérifiez la connexion</span>
                 `;
+                
+                document.getElementById('server-details').innerHTML = `
+                    <p class="text-danger">Impossible de contacter le serveur Zenv Hub</p>
+                    <p>Vérifiez que l'API est en cours d'exécution à l'adresse:</p>
+                    <code>${API_URL}</code>
+                `;
+                
+                return false;
             }
         }
-        
-        // Charger les packages
+
+        // Load Packages
         async function loadPackages() {
             try {
-                const response = await fetch(`${API_URL}/api/packages`);
-                const data = await response.json();
+                const response = await axios.get(`${API_URL}/api/packages`);
+                const data = response.data;
                 
-                document.getElementById('package-count').textContent = data.count || 0;
+                allPackages = data.packages || [];
+                document.getElementById('packages-count').textContent = allPackages.length;
                 
-                const packagesList = document.getElementById('packages-list');
-                if (data.packages && data.packages.length > 0) {
-                    let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">';
-                    
-                    data.packages.slice(0, 6).forEach(pkg => {
+                // Display recent packages
+                const recentDiv = document.getElementById('recent-packages');
+                if (allPackages.length > 0) {
+                    let html = '<div class="grid grid-2">';
+                    allPackages.slice(0, 4).forEach(pkg => {
                         html += `
-                            <div style="background: #f7fafc; padding: 1.5rem; border-radius: 8px; border-left: 4px solid #4299e1;">
-                                <h3 style="margin: 0 0 0.5rem 0; color: #2d3748;">${pkg.name}</h3>
-                                <p style="color: #718096; margin: 0.5rem 0;">v${pkg.version}</p>
-                                <p style="font-size: 0.9rem; color: #4a5568;">${pkg.description || 'Pas de description'}</p>
-                                <a href="${API_URL}/api/packages/download/${pkg.name}/${pkg.version}" 
-                                   target="_blank"
-                                   style="display: inline-block; background: #4299e1; color: white; padding: 0.5rem 1rem; border-radius: 4px; text-decoration: none; margin-top: 1rem; font-size: 0.9rem;">
-                                    <i class="fas fa-download"></i> Télécharger
-                                </a>
+                            <div class="package-card">
+                                <div class="package-header">
+                                    <div class="package-name">${pkg.name}</div>
+                                    <div class="package-version">v${pkg.version}</div>
+                                </div>
+                                <div class="package-body">
+                                    <p class="package-description">${pkg.description || 'No description'}</p>
+                                    <div class="package-meta">
+                                        <span><i class="fas fa-user"></i> ${pkg.author || 'Unknown'}</span>
+                                        <span><i class="fas fa-download"></i> ${pkg.downloads_count || 0}</span>
+                                    </div>
+                                </div>
+                                <div class="package-footer">
+                                    <a href="${API_URL}${pkg.download_url}" class="btn btn-sm btn-success">
+                                        <i class="fas fa-download"></i> Télécharger
+                                    </a>
+                                    <button onclick="showPackageInfo('${pkg.name}')" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-info"></i> Détails
+                                    </button>
+                                </div>
                             </div>
                         `;
                     });
-                    
                     html += '</div>';
-                    packagesList.innerHTML = html;
+                    recentDiv.innerHTML = html;
                 } else {
-                    packagesList.innerHTML = '<p>Aucun package disponible pour le moment.</p>';
+                    recentDiv.innerHTML = '<p>Aucun package disponible.</p>';
+                }
+                
+                return allPackages;
+            } catch (error) {
+                console.error('Error loading packages:', error);
+                document.getElementById('recent-packages').innerHTML = 
+                    '<p class="text-danger">Erreur lors du chargement des packages.</p>';
+                return [];
+            }
+        }
+
+        // Load All Packages (for packages tab)
+        async function loadAllPackages() {
+            const packagesDiv = document.getElementById('all-packages');
+            packagesDiv.innerHTML = '<p><i class="fas fa-spinner fa-spin"></i> Chargement...</p>';
+            
+            try {
+                const response = await axios.get(`${API_URL}/api/packages`);
+                const data = response.data;
+                
+                if (data.packages && data.packages.length > 0) {
+                    let html = '<div class="grid grid-3">';
+                    data.packages.forEach(pkg => {
+                        html += `
+                            <div class="package-card">
+                                <div class="package-header">
+                                    <div class="package-name">${pkg.name}</div>
+                                    <div class="package-version">v${pkg.version}</div>
+                                </div>
+                                <div class="package-body">
+                                    <p class="package-description">${pkg.description || 'No description'}</p>
+                                    <div class="package-meta">
+                                        <span><i class="fas fa-user"></i> ${pkg.author || 'Unknown'}</span>
+                                        <span><i class="fas fa-file-alt"></i> ${pkg.license || 'MIT'}</span>
+                                        <span><i class="fas fa-download"></i> ${pkg.downloads_count || 0}</span>
+                                    </div>
+                                </div>
+                                <div class="package-footer">
+                                    <a href="${API_URL}${pkg.download_url}" class="btn btn-sm btn-success" target="_blank">
+                                        <i class="fas fa-download"></i> Télécharger
+                                    </a>
+                                    <a href="${API_URL}/api/readme/${pkg.name}" class="btn btn-sm btn-primary" target="_blank">
+                                        <i class="fas fa-book"></i> README
+                                    </a>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    packagesDiv.innerHTML = html;
+                } else {
+                    packagesDiv.innerHTML = '<p>Aucun package disponible.</p>';
                 }
             } catch (error) {
-                console.error('Erreur chargement packages:', error);
+                packagesDiv.innerHTML = '<p class="text-danger">Erreur lors du chargement des packages.</p>';
             }
         }
-        
-        // Charger les badges
+
+        // Load Badges
         async function loadBadges() {
             try {
-                const response = await fetch(`${API_URL}/api/badges`);
-                const data = await response.json();
-                document.getElementById('badge-count').textContent = data.count || 0;
+                const response = await axios.get(`${API_URL}/api/badges`);
+                const data = response.data;
+                
+                allBadges = data.badges || [];
+                document.getElementById('badges-count').textContent = allBadges.length;
+                
+                // Display popular badges
+                const badgesDiv = document.getElementById('popular-badges');
+                if (allBadges.length > 0) {
+                    let html = '<div style="display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center;">';
+                    allBadges.slice(0, 6).forEach(badge => {
+                        html += `
+                            <div style="text-align: center;">
+                                <img src="${API_URL}/badge/svg/${badge.name}" alt="${badge.label}: ${badge.value}">
+                                <p style="font-size: 0.9rem; margin-top: 0.5rem;">${badge.label}: ${badge.value}</p>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    badgesDiv.innerHTML = html;
+                } else {
+                    badgesDiv.innerHTML = '<p>Aucun badge disponible.</p>';
+                }
+                
+                return allBadges;
             } catch (error) {
-                console.error('Erreur chargement badges:', error);
+                console.error('Error loading badges:', error);
+                return [];
             }
         }
-        
-        // Initialiser tout au chargement
-        document.addEventListener('DOMContentLoaded', function() {
-            loadServerStatus();
-            loadPackages();
-            loadBadges();
+
+        // Load All Badges (for badges tab)
+        async function loadAllBadges() {
+            const badgesDiv = document.getElementById('badges-gallery');
+            badgesDiv.innerHTML = '<p><i class="fas fa-spinner fa-spin"></i> Chargement...</p>';
             
-            // Rafraîchir toutes les 30 secondes
-            setInterval(() => {
-                loadServerStatus();
-            }, 30000);
+            try {
+                const response = await axios.get(`${API_URL}/api/badges`);
+                const data = response.data;
+                
+                if (data.badges && data.badges.length > 0) {
+                    let html = '<div class="grid grid-4">';
+                    data.badges.forEach(badge => {
+                        html += `
+                            <div class="card" style="text-align: center;">
+                                <img src="${API_URL}/badge/svg/${badge.name}" alt="${badge.label}: ${badge.value}" style="max-width: 100%;">
+                                <div style="padding: 1rem;">
+                                    <p><strong>${badge.label}: ${badge.value}</strong></p>
+                                    <p style="font-size: 0.8rem; color: #666;">${badge.name}</p>
+                                    <button onclick="copyBadgeUrl('${badge.name}')" class="btn btn-sm btn-secondary">
+                                        <i class="far fa-copy"></i> Copier
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    badgesDiv.innerHTML = html;
+                } else {
+                    badgesDiv.innerHTML = '<p>Aucun badge disponible.</p>';
+                }
+            } catch (error) {
+                badgesDiv.innerHTML = '<p class="text-danger">Erreur lors du chargement des badges.</p>';
+            }
+        }
+
+        // Upload Package
+        document.getElementById('upload-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('name', document.getElementById('package-name').value);
+            formData.append('version', document.getElementById('package-version').value);
+            formData.append('description', document.getElementById('package-description').value);
+            formData.append('license', document.getElementById('package-license').value);
+            formData.append('file', document.getElementById('package-file').files[0]);
+            
+            if (document.getElementById('readme-file').files[0]) {
+                formData.append('readme', document.getElementById('readme-file').files[0]);
+            }
+            
+            if (document.getElementById('license-file').files[0]) {
+                formData.append('license_file', document.getElementById('license-file').files[0]);
+            }
+            
+            const token = document.getElementById('upload-token').value;
+            
+            try {
+                const response = await axios.post(`${API_URL}/api/packages/upload`, formData, {
+                    headers: {
+                        'Authorization': `Token ${token}`,
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
+                
+                toastr.success('Package uploaded successfully!');
+                document.getElementById('upload-form').reset();
+                loadPackages();
+            } catch (error) {
+                toastr.error(error.response?.data?.error || 'Upload failed');
+            }
         });
+
+        // Badge Generator
+        document.getElementById('badge-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            updateBadgePreview();
+        });
+
+        function updateBadgePreview() {
+            const label = document.getElementById('badge-label').value || 'Zenv';
+            const value = document.getElementById('badge-value').value || '2.1.0';
+            const color = document.getElementById('badge-color').value;
+            const logo = document.getElementById('badge-logo').value;
+            
+            let url = `${API_URL}/badge/custom/${encodeURIComponent(label)}/${encodeURIComponent(value)}/${color}`;
+            if (logo) {
+                url += `/${encodeURIComponent(logo)}`;
+            }
+            
+            const img = document.getElementById('badge-preview-image');
+            img.innerHTML = `<img src="${url}" alt="${label}: ${value}" style="max-width: 100%;">`;
+            
+            const markdown = `![${label}: ${value}](${url})`;
+            document.getElementById('badge-markdown').textContent = markdown;
+            
+            toastr.success('Badge updated!');
+        }
+
+        function copyBadgeCode() {
+            const code = document.getElementById('badge-markdown').textContent;
+            navigator.clipboard.writeText(code);
+            toastr.info('Code copié dans le presse-papier!');
+        }
+
+        function copyBadgeUrl(badgeName) {
+            const url = `${API_URL}/badge/svg/${badgeName}`;
+            navigator.clipboard.writeText(url);
+            toastr.info('URL du badge copiée!');
+        }
+
+        // Login
+        document.getElementById('login-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            
+            try {
+                const response = await axios.post(`${API_URL}/api/auth/login`, {
+                    username,
+                    password
+                });
+                
+                currentUser = response.data.user;
+                toastr.success(`Bienvenue ${currentUser.username}!`);
+                document.getElementById('login-form').reset();
+                
+                // Show user info
+                showTab('dashboard');
+            } catch (error) {
+                toastr.error(error.response?.data?.error || 'Login failed');
+            }
+        });
+
+        // Register
+        document.getElementById('register-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('register-username').value;
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+            
+            try {
+                const response = await axios.post(`${API_URL}/api/auth/register`, {
+                    username,
+                    email,
+                    password
+                });
+                
+                toastr.success('Compte créé avec succès!');
+                document.getElementById('register-form').reset();
+                showTab('login');
+            } catch (error) {
+                toastr.error(error.response?.data?.error || 'Registration failed');
+            }
+        });
+
+        // Package Search
+        document.getElementById('package-search').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            
+            if (!searchTerm) {
+                // Reset to all packages
+                const packages = document.querySelectorAll('#all-packages .package-card');
+                packages.forEach(pkg => pkg.style.display = 'block');
+                return;
+            }
+            
+            const packages = document.querySelectorAll('#all-packages .package-card');
+            packages.forEach(pkg => {
+                const name = pkg.querySelector('.package-name').textContent.toLowerCase();
+                const description = pkg.querySelector('.package-description').textContent.toLowerCase();
+                
+                if (name.includes(searchTerm) || description.includes(searchTerm)) {
+                    pkg.style.display = 'block';
+                } else {
+                    pkg.style.display = 'none';
+                }
+            });
+        });
+
+        // Initialize
+        async function init() {
+            await checkServerStatus();
+            await loadPackages();
+            await loadBadges();
+            updateBadgePreview();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(checkServerStatus, 30000);
+            setInterval(loadPackages, 60000);
+        }
+
+        // Start the app
+        document.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
 </html>
