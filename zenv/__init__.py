@@ -3,7 +3,7 @@ Zenv Programming Language
 A modern, expressive language that transpiles to Python
 """
 
-__version__ = "1.0.0"
+__version__ = "2.1.7"
 __author__ = "Zenv Team"
 __license__ = "MIT"
 
