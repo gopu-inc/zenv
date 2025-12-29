@@ -1,0 +1,23 @@
+name: Publish Badge Assets
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  publish-assets:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout du code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Copier le logo vers GitHub Pages (ou artefacts)
+      - name: Upload badge logo
+        uses: actions/upload-artifact@v4
+        with:
+          name: zenv-badge-logo
+          path: assets/IMG_7694.png
