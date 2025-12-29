@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 Zenv Package Hub</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .hero {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 3rem;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+            margin-top: 2rem;
+        }
+        
+        h1 {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            color: #2d3748;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+        
+        .subtitle {
+            font-size: 1.5rem;
+            color: #4a5568;
+            margin-bottom: 2rem;
+        }
+        
+        .server-info {
+            background: #f7fafc;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 2rem auto;
+            max-width: 800px;
+            border-left: 4px solid #4299e1;
+        }
+        
+        .info-item {
+            margin: 0.5rem 0;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin: 3rem 0;
+        }
+        
+        .feature-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
+        }
+        
+        .feature-icon {
+            font-size: 2.5rem;
+            color: #4299e1;
+            margin-bottom: 1rem;
+        }
+        
+        .feature-card h3 {
+            color: #2d3748;
+            margin-bottom: 1rem;
+        }
+        
+        .feature-card ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .feature-card li {
+            padding: 0.5rem 0;
+            color: #4a5568;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .feature-card li:before {
+            content: "✓";
+            color: #48bb78;
+            margin-right: 0.5rem;
+            font-weight: bold;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin: 3rem 0;
+            flex-wrap: wrap;
+        }
+        
+        .stat {
+            text-align: center;
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            min-width: 150px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #4299e1;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-label {
+            color: #718096;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .navigation {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin: 3rem 0;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 1rem 2rem;
+            background: #4299e1;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: background 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn:hover {
+            background: #3182ce;
+        }
+        
+        .btn-secondary {
+            background: #718096;
+        }
+        
+        .btn-secondary:hover {
+            background: #4a5568;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 2rem;
+            margin: 2rem auto;
+            max-width: 600px;
+            border-radius: 12px;
+            background: #f0fff4;
+            border: 2px solid #48bb78;
+            color: #276749;
+        }
+        
+        .error {
+            background: #fff5f5;
+            border-color: #fc8181;
+            color: #c53030;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: white;
+            margin-top: 3rem;
+        }
+        
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+            
+            .hero {
+                padding: 2rem;
+                margin: 1rem;
+            }
+            
+            .features {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats {
+                gap: 1rem;
+            }
+            
+            .stat {
+                min-width: 120px;
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hero">
+            <h1>
+                <i class="fas fa-rocket"></i>
+                Zenv Package Hub
+            </h1>
+            
+            <p class="subtitle">
+                Gestionnaire de packages Zenv avec dépôt privé et accès public
+            </p>
+            
+            <div class="server-info">
+                <div class="info-item">
+                    <strong>API URL:</strong> https://zenv-hub.onrender.com
+                </div>
+                <div class="info-item">
+                    <strong>Version:</strong> 2.1.0
+                </div>
+                <div class="info-item">
+                    <strong>Mode:</strong> Dépôt privé, fichiers publics
+                </div>
+            </div>
+            
+            <div id="server-status" class="status">
+                <p><i class="fas fa-sync fa-spin"></i> Vérification de la connexion...</p>
+            </div>
+        </div>
+        
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-number" id="package-count">0</div>
+                <div class="stat-label">Packages</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number" id="badge-count">0</div>
+                <div class="stat-label">Badges</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">2.1.0</div>
+                <div class="stat-label">API Version</div>
+            </div>
+        </div>
+        
+        <div class="features">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-box"></i>
+                </div>
+                <h3>Gestion des Packages</h3>
+                <ul>
+                    <li>Upload de packages .zv</li>
+                    <li>Téléchargement public</li>
+                    <li>Documentation automatique</li>
+                    <li>Gestion des versions</li>
+                </ul>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <h3>Système de Badges</h3>
+                <ul>
+                    <li>Badges SVG personnalisés</li>
+                    <li>Support logos intégrés</li>
+                    <li>Format shields.io</li>
+                    <li>Atelier de création</li>
+                </ul>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-lock"></i>
+                </div>
+                <h3>Sécurité</h3>
+                <ul>
+                    <li>Tokens zenv_*</li>
+                    <li>Authentification JWT</li>
+                    <li>Rôles utilisateurs</li>
+                    <li>API sécurisée</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="navigation">
+            <a href="https://zenv-hub.onrender.com/api/packages" target="_blank" class="btn">
+                <i class="fas fa-box-open"></i>
+                Explorer les Packages
+            </a>
+            <a href="https://zenv-hub.onrender.com/api/badges" target="_blank" class="btn btn-secondary">
+                <i class="fas fa-shield-alt"></i>
+                Voir les Badges
+            </a>
+            <a href="https://zenv-hub.onrender.com/api/version" target="_blank" class="btn">
+                <i class="fas fa-code"></i>
+                API Documentation
+            </a>
+        </div>
+        
+        <div id="recent-packages" style="background: white; padding: 2rem; border-radius: 12px; margin: 2rem 0;">
+            <h2 style="text-align: center; margin-bottom: 2rem; color: #2d3748;">
+                <i class="fas fa-fire"></i> Derniers Packages
+            </h2>
+            <div id="packages-list" style="text-align: center;">
+                <p><i class="fas fa-spinner fa-spin"></i> Chargement des packages...</p>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        <p>Zenv Package Hub © 2024 | Connecté à votre API Zenv Hub</p>
+        <p>Déployé sur GitHub Pages | CI/CD Automatique</p>
+    </footer>
+    
+    <script>
+        // Configuration
+        const API_URL = 'https://zenv-hub.onrender.com';
+        
+        // Charger le statut du serveur
+        async function loadServerStatus() {
+            try {
+                const response = await fetch(`${API_URL}/api/health`);
+                const data = await response.json();
+                
+                const statusDiv = document.getElementById('server-status');
+                if (data.status === 'ok') {
+                    statusDiv.innerHTML = `
+                        <p><i class="fas fa-check-circle"></i> <strong>Serveur connecté</strong></p>
+                        <p>GitHub: ${data.github} | Dernière vérification: ${new Date().toLocaleTimeString()}</p>
+                    `;
+                } else {
+                    statusDiv.className = 'status error';
+                    statusDiv.innerHTML = `<p><i class="fas fa-exclamation-circle"></i> <strong>Problème de connexion</strong></p>`;
+                }
+            } catch (error) {
+                const statusDiv = document.getElementById('server-status');
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = `
+                    <p><i class="fas fa-exclamation-triangle"></i> <strong>Impossible de contacter le serveur</strong></p>
+                    <p>Vérifiez que l'API Zenv Hub est en cours d'exécution</p>
+                `;
+            }
+        }
+        
+        // Charger les packages
+        async function loadPackages() {
+            try {
+                const response = await fetch(`${API_URL}/api/packages`);
+                const data = await response.json();
+                
+                document.getElementById('package-count').textContent = data.count || 0;
+                
+                const packagesList = document.getElementById('packages-list');
+                if (data.packages && data.packages.length > 0) {
+                    let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">';
+                    
+                    data.packages.slice(0, 6).forEach(pkg => {
+                        html += `
+                            <div style="background: #f7fafc; padding: 1.5rem; border-radius: 8px; border-left: 4px solid #4299e1;">
+                                <h3 style="margin: 0 0 0.5rem 0; color: #2d3748;">${pkg.name}</h3>
+                                <p style="color: #718096; margin: 0.5rem 0;">v${pkg.version}</p>
+                                <p style="font-size: 0.9rem; color: #4a5568;">${pkg.description || 'Pas de description'}</p>
+                                <a href="${API_URL}/api/packages/download/${pkg.name}/${pkg.version}" 
+                                   target="_blank"
+                                   style="display: inline-block; background: #4299e1; color: white; padding: 0.5rem 1rem; border-radius: 4px; text-decoration: none; margin-top: 1rem; font-size: 0.9rem;">
+                                    <i class="fas fa-download"></i> Télécharger
+                                </a>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                    packagesList.innerHTML = html;
+                } else {
+                    packagesList.innerHTML = '<p>Aucun package disponible pour le moment.</p>';
+                }
+            } catch (error) {
+                console.error('Erreur chargement packages:', error);
+            }
+        }
+        
+        // Charger les badges
+        async function loadBadges() {
+            try {
+                const response = await fetch(`${API_URL}/api/badges`);
+                const data = await response.json();
+                document.getElementById('badge-count').textContent = data.count || 0;
+            } catch (error) {
+                console.error('Erreur chargement badges:', error);
+            }
+        }
+        
+        // Initialiser tout au chargement
+        document.addEventListener('DOMContentLoaded', function() {
+            loadServerStatus();
+            loadPackages();
+            loadBadges();
+            
+            // Rafraîchir toutes les 30 secondes
+            setInterval(() => {
+                loadServerStatus();
+            }, 30000);
+        });
+    </script>
+</body>
+</html>
